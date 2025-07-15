@@ -68,15 +68,9 @@ void run_cuda(int argc, char *argv[]) {
     int n;
     char filename[256];
 
-    if (argc >= 2) n = atoi(argv[1]);
-    else { printf("Enter N: "); scanf("%d", &n); }
-
-    if (argc >= 3) a = atof(argv[2]);
-    else { printf("Enter A: "); scanf("%lf", &a); }
-
-    if (argc >= 4) b = atof(argv[3]);
-    else { printf("Enter B: "); scanf("%lf", &b); }
-
+    if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
+    if (argc >= 3) a = atof(argv[2]); else { printf("Enter A: "); scanf("%lf", &a); }
+    if (argc >= 4) b = atof(argv[3]); else { printf("Enter B: "); scanf("%lf", &b); }
     if (argc >= 5) {
         strncpy(filename, argv[4], sizeof(filename) - 1);
         filename[sizeof(filename) - 1] = '\0';
@@ -98,17 +92,19 @@ void run_cuda(int argc, char *argv[]) {
     double time_seq = (t2.tv_sec - t1.tv_sec) * 1e3 +
                       (t2.tv_nsec - t1.tv_nsec) / 1e6;
 
+    double *xx = ccn_compute_points_new(n);
+
+    double *ww_warmup = nc_compute_new_cuda(n, a, b, xx);
+    cudaFreeHost(ww_warmup);
+
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    double *xx = ccn_compute_points_new(n);
-    cudaProfilerStart();
     cudaEventRecord(start);
         double *ww = nc_compute_new_cuda(n, a, b, xx);
     cudaEventRecord(stop);
     cudaEventSynchronize(stop);
-    cudaProfilerStop();
     float time_par;
     cudaEventElapsedTime(&time_par, start, stop);
 
