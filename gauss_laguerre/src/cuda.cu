@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
 #include <cufft.h>
 
 #define RED     "\033[1;31m"
@@ -87,29 +89,32 @@ void run_cuda(int argc, char *argv[]) {
     if (!r) { perror("malloc"); exit(1); }
     r[0] = a; r[1] = b;
 
+    struct timespec t1, t2;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+        double *x = ccn_compute_points_new(n);
+        double *w = nc_compute_new(n, -1.0, +1.0, x);
+        rescale(a, b, n, x, w);
+    clock_gettime(CLOCK_MONOTONIC, &t2);
+    double time_seq = (t2.tv_sec - t1.tv_sec) * 1e3 +
+                      (t2.tv_nsec - t1.tv_nsec) / 1e6;
+
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    cudaEventRecord(start, 0);
-        double *x = ccn_compute_points_new(n);
-        double *w = nc_compute_new(n, -1.0, +1.0, x);
-        rescale(a, b, n, x, w);
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    float time_seq;
-    cudaEventElapsedTime(&time_seq, start, stop);
-
-    cudaEventRecord(start, 0);
-        double *xx = ccn_compute_points_new(n);
+    double *xx = ccn_compute_points_new(n);
+    cudaProfilerStart();
+    cudaEventRecord(start);
         double *ww = nc_compute_new_cuda(n, a, b, xx);
-        for (int i = 0; i < n; i++) {
-            xx[i] = ((a + b) + (b - a) * xx[i]) * 0.5;
-        }
-    cudaEventRecord(stop, 0);
+    cudaEventRecord(stop);
     cudaEventSynchronize(stop);
+    cudaProfilerStop();
     float time_par;
     cudaEventElapsedTime(&time_par, start, stop);
+
+    for (int i = 0; i < n; i++) {
+        xx[i] = ((a + b) + (b - a) * xx[i]) * 0.5;
+    }
 
     int ok = 1;
     for (int i = 0; i < n; i++) {
@@ -120,8 +125,8 @@ void run_cuda(int argc, char *argv[]) {
     }
 
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("%s  Sequential time: %s%fms %s\n", BOLD, BLUE, time_seq, CLEAR);
-    printf("%s  Parallel time:   %s%fms %s\n", BOLD, BLUE, time_par, CLEAR);
+    printf("%s  Sequential time: %s%.3fms %s\n", BOLD, BLUE, time_seq, CLEAR);
+    printf("%s  Parallel time:   %s%.3fms %s\n", BOLD, BLUE, time_par, CLEAR);
     printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, time_seq / time_par, CLEAR);
     rule_write(n, filename, xx, ww, r);
     printf("\n");
