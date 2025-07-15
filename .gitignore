@@ -9,6 +9,7 @@
 *.tar.gz
 
 # Build‐artifacts, binaries and outputs
+**/bin/
 **/binc/
 **/output/
 **/*.o
