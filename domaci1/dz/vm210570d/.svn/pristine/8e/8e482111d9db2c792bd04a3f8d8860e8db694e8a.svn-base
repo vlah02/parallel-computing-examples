@@ -1,2 +1,0 @@
-./sgemm data/small/input/matrix1.txt data/small/input/matrix2t.txt result_small.txt
-./sgemm data/medium/input/matrix1.txt data/medium/input/matrix2t.txt result_medium.txt
