@@ -1,5 +1,3 @@
-# Makefile
-
 # Tools
 CC      := gcc
 MPI_CC  := mpicc

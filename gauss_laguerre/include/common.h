@@ -1,4 +1,3 @@
-// common.h
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -17,4 +16,4 @@ extern "C" {
 }
 #endif
 
-#endif // COMMON_H
+#endif

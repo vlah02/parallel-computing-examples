@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# the set of quadrature orders we want to test
 orders=(99 999 2999)
 
-# make sure output subdirs exist
 for variant in seq mpi omp cuda; do
   mkdir -p output/$variant
 done
@@ -25,7 +23,7 @@ echo "==> Running OpenMP version (8 threads)"
 export OMP_NUM_THREADS=8
 for N in "${orders[@]}"; do
   printf "  N=%-4d  " "$N"
-  ./bin/omp   $N -100 +100 output/omp/ccn_o${N}
+  ./bin/omp $N -100 +100 output/omp/ccn_o${N}
 done
 
 echo "==> Running CUDA version"

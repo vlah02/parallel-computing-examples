@@ -1,4 +1,3 @@
-// cuda.h
 #ifndef CUDA_H
 #define CUDA_H
 
@@ -12,4 +11,4 @@ extern "C" {
 }
 #endif
 
-#endif // CUDA_H
+#endif

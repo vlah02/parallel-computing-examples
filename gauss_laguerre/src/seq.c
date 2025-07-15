@@ -1,18 +1,16 @@
-// seq.c
-#include "../include/seq.h"
-#include "../include/common.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "../include/seq.h"
+#include "../include/common.h"
 
 void run_sequential(int argc, char *argv[]) {
     double a, b;
     int    n;
     char   filename[256];
 
-    // --- parse arguments or prompt ---
     if (argc >= 2) {
         n = atoi(argv[1]);
     } else {
@@ -42,12 +40,10 @@ void run_sequential(int argc, char *argv[]) {
         scanf("%s", filename);
     }
 
-    // Prepare region array
     double *r = malloc(2 * sizeof(double));
     if (!r) { perror("malloc"); exit(1); }
     r[0] = a; r[1] = b;
 
-    // --- sequential computation & timing ---
     clock_t t_start = clock();
 
     double *x = ccn_compute_points_new(n);
@@ -56,12 +52,10 @@ void run_sequential(int argc, char *argv[]) {
 
     clock_t t_end = clock();
     double elapsed = (double)(t_end - t_start) / CLOCKS_PER_SEC;
-    printf("Sequential time: %f seconds\n", elapsed);
-
-    // Write output files
+    printf("\n  Sequential time: %f seconds\n", elapsed);
     rule_write(n, filename, x, w, r);
+    printf("\n");
 
-    // Cleanup
     free(r);
     free(x);
     free(w);
