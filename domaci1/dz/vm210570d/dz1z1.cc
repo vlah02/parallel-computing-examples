@@ -1,0 +1,227 @@
+#include <malloc.h>
+#include <math.h>
+#include <omp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/time.h>
+
+#include <fstream>
+#include <iostream>
+#include <vector>
+
+std::string red = "\033[1;31m";
+std::string green = "\033[1;32m";
+std::string blue = "\033[1;36m";
+std::string clear = "\033[0m";
+
+bool readColMajorMatrixFile(const char *fn, int &nr_row, int &nr_col,
+                            std::vector<float> &v) {
+  std::cerr << "Opening file:" << fn << std::endl;
+  std::fstream f(fn, std::fstream::in);
+  if (!f.good()) {
+    return false;
+  }
+
+  // Read # of rows and cols
+  f >> nr_row;
+  f >> nr_col;
+
+  float data;
+  std::cerr << "Matrix dimension: " << nr_row << "x" << nr_col << std::endl;
+  while (f.good()) {
+    f >> data;
+    v.push_back(data);
+  }
+  v.pop_back();  // remove the duplicated last element
+
+  return false;
+}
+
+bool writeColMajorMatrixFile(const char *fn, int nr_row, int nr_col,
+                             std::vector<float> &v) {
+  std::cerr << "Opening file:" << fn << " for write." << std::endl;
+  std::fstream f(fn, std::fstream::out);
+  if (!f.good()) {
+    return false;
+  }
+
+  // Read # of rows and cols
+  f << nr_row << " " << nr_col << " ";
+
+  float data;
+  std::cerr << "Matrix dimension: " << nr_row << "x" << nr_col << std::endl;
+  for (int i = 0; i < v.size(); ++i) {
+    f << v[i] << ' ';
+  }
+  f << "\n";
+  return true;
+}
+
+/*
+ * Base C implementation of MM
+ */
+
+void basicSgemm(char transa, char transb, int m, int n, int k, float alpha,
+                const float *A, int lda, const float *B, int ldb, float beta,
+                float *C, int ldc) {
+  if ((transa != 'N') && (transa != 'n')) {
+    std::cerr << "unsupported value of 'transa' in regtileSgemm()" << std::endl;
+    return;
+  }
+
+  if ((transb != 'T') && (transb != 't')) {
+    std::cerr << "unsupported value of 'transb' in regtileSgemm()" << std::endl;
+    return;
+  }
+
+  for (int mm = 0; mm < m; ++mm) {
+    for (int nn = 0; nn < n; ++nn) {
+      float c = 0.0f;
+      for (int i = 0; i < k; ++i) {
+        float a = A[mm + i * lda];
+        float b = B[nn + i * ldb];
+        c += a * b;
+      }
+      C[mm + nn * ldc] = C[mm + nn * ldc] * beta + alpha * c;
+    }
+  }
+}
+
+void parallelSgemm(char transa, char transb, int m, int n, int k, float alpha,
+                   const float *A, int lda, const float *B, int ldb, float beta,
+                   float *C, int ldc) {
+  if ((transa != 'N') && (transa != 'n')) {
+    std::cerr << "unsupported value of 'transa' in regtileSgemm()" << std::endl;
+    return;
+  }
+
+  if ((transb != 'T') && (transb != 't')) {
+    std::cerr << "unsupported value of 'transb' in regtileSgemm()" << std::endl;
+    return;
+  }
+
+// rucna paralelizacija
+#pragma omp parallel
+  {
+    int num_of_threads = omp_get_num_threads();
+    int thread_id = omp_get_thread_num();
+
+    int chunk_size = m / num_of_threads;
+    int leftover_size = m % num_of_threads;
+    int starting_index =
+        chunk_size * thread_id +
+        (leftover_size > thread_id ? thread_id : leftover_size);
+    int end_index =
+        starting_index + chunk_size + (leftover_size > thread_id ? 1 : 0);
+
+    for (int mm = starting_index; mm < end_index; ++mm) {
+      for (int nn = 0; nn < n; ++nn) {
+        float c = 0.0f;
+        for (int i = 0; i < k; ++i) {
+          float a = A[mm + i * lda];
+          float b = B[nn + i * ldb];
+          c += a * b;
+        }
+        C[mm + nn * ldc] = C[mm + nn * ldc] * beta + alpha * c;
+      }
+    }
+  }
+}
+
+bool compare_files(const std::string &file1, const std::string &file2) {
+  std::ifstream infile1(file1), infile2(file2);
+
+  if (!infile1.is_open() || !infile2.is_open()) {
+    std::cerr << "Error opening files." << std::endl;
+    return false;
+  }
+
+  double num1, num2;
+  while (infile1 >> num1 && infile2 >> num2) {
+    if (abs(num1 - num2) < 0.01) {
+      return false;
+    }
+  }
+
+  if (infile1.eof() && infile2.eof()) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+int main(int argc, char *argv[]) {
+  int matArow, matAcol;
+  int matBrow, matBcol;
+  std::vector<float> matA, matBT;
+
+  int cpu_nums[] = {2, 4, 8, 16};
+
+  if (argc != 4) {
+    fprintf(stderr, "Expecting three input filenames\n");
+    exit(-1);
+  }
+
+  /* Read in data */
+  // load A
+  readColMajorMatrixFile(argv[1], matArow, matAcol, matA);
+
+  // load B^T
+  readColMajorMatrixFile(argv[2], matBcol, matBrow, matBT);
+
+  std::string input = argv[3];
+  std::string input_seq = "seq_" + input;
+  std::string input_par = "par_" + input;
+  std::string input_wk = "wk_" + input;
+
+  // allocate space for C
+  std::vector<float> matC(matArow * matBcol);
+
+  double start = omp_get_wtime();
+
+  // Use standard sgemm interface
+  basicSgemm('N', 'T', matArow, matBcol, matAcol, 1.0f, &matA.front(), matArow,
+             &matBT.front(), matBcol, 0.0f, &matC.front(), matArow);
+
+  double end = omp_get_wtime();
+
+  double elapsed_time = end - start;
+
+  std::cout << blue << "Time elapsed = " << elapsed_time << " seconds" << clear
+            << std::endl;
+  writeColMajorMatrixFile(input_seq.c_str(), matArow, matBcol, matC);
+
+  for (auto cpu_num : cpu_nums) {
+    omp_set_num_threads(cpu_num);
+    std::cout << blue << "Calculating for " << cpu_num << " cpus" << clear
+              << std::endl;
+
+    start = omp_get_wtime();
+    parallelSgemm('N', 'T', matArow, matBcol, matAcol, 1.0f, &matA.front(),
+                  matArow, &matBT.front(), matBcol, 0.0f, &matC.front(),
+                  matArow);
+
+    end = omp_get_wtime();
+
+    double elapsed_time_par = end - start;
+
+    std::cout << blue << "Parralel computing" << std::endl
+              << "==================================" << clear << std::endl;
+    std::cout << blue << "Time elapsed = " << elapsed_time_par << " seconds"
+              << clear << std::endl;
+    std::cout << blue << "Speedup = " << elapsed_time / elapsed_time_par
+              << clear << std::endl;
+
+    writeColMajorMatrixFile(input_par.c_str(), matArow, matBcol, matC);
+
+    if (compare_files(input_seq, input_par)) {
+      std::cout << red << "TEST FAILED" << clear << std::endl;
+    }
+
+  }
+
+  std::cout << green << "ALL TESTS PASSED" << clear << std::endl;
+
+  return 0;
+}

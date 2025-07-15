@@ -1,0 +1,15 @@
+
+ccn_rule:252565 terminated with signal 6 at PC=7fc1365e59fc SP=7ffdf94e3260.  Backtrace:
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x7fc1365e59fc]
+/lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x7fc136591476]
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x7fc1365777f3]
+/lib/x86_64-linux-gnu/libc.so.6(+0x89676)[0x7fc1365d8676]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa0cfc)[0x7fc1365efcfc]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa2f22)[0x7fc1365f1f22]
+/lib/x86_64-linux-gnu/libc.so.6(free+0x73)[0x7fc1365f4453]
+/lib/x86_64-linux-gnu/libmpich.so.12(+0x233eb1)[0x7fc136a92eb1]
+/lib/x86_64-linux-gnu/libmpich.so.12(PMPI_Finalize+0x16)[0x7fc136942026]
+./ccn_rule(+0x1cd7)[0x563c252accd7]
+/lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x7fc136578d90]
+/lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7fc136578e40]
+./ccn_rule(+0x13a5)[0x563c252ac3a5]

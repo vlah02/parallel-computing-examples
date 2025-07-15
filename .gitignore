@@ -1,0 +1,16 @@
+# IDE configs
+.idea/
+
+# Subversion metadata
+**/.svn/
+*.svn
+
+# Archives and packages
+*.tar.gz
+
+# Build‐artifacts, binaries and outputs
+**/binc/
+**/output/
+**/*.o
+**/*.out
+**/*.txt
