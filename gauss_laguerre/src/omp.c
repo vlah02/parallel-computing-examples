@@ -53,43 +53,51 @@ double *nc_compute_new_tasks(int n, double x_min, double x_max, double x[]) {
 
 int main(int argc, char *argv[]) {
     double a, b;
-    int    n;
-    char   filename[256];
+    int n;
+    char out_prefix[256];
 
-    if (argc >= 2)      n = atoi(argv[1]);
-    else { printf("Enter N: "); scanf("%d", &n); }
+    if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
+    if (argc >= 3) a = atof(argv[2]); else { printf("Enter A: "); scanf("%lf", &a); }
+    if (argc >= 4) b = atof(argv[3]); else { printf("Enter B: "); scanf("%lf", &b); }
+    if (argc >= 5) strncpy(out_prefix, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", out_prefix); }
+    out_prefix[255] = '\0';
 
-    if (argc >= 3)      a = atof(argv[2]);
-    else { printf("Enter A: "); scanf("%lf", &a); }
+    const char *basename = strrchr(out_prefix, '/');
+    basename = (basename == NULL) ? out_prefix : basename + 1;
 
-    if (argc >= 4)      b = atof(argv[3]);
-    else { printf("Enter B: "); scanf("%lf", &b); }
+    // Load sequential reference data
+    char xfile[300], wfile[300], tfile[300];
+    snprintf(xfile, sizeof(xfile), "output/seq/%s_x.txt", basename);
+    snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
+    snprintf(tfile, sizeof(tfile), "output/seq/%s_time.txt", basename);
 
-    if (argc >= 5) {
-        strncpy(filename, argv[4], sizeof(filename) - 1);
-        filename[sizeof(filename) - 1] = '\0';
-    } else {
-        printf("Enter root filename: ");
-        scanf("%s", filename);
+    double *x = (double *)malloc(n * sizeof(double));
+    double *w = (double *)malloc(n * sizeof(double));
+    double time_seq;
+
+    FILE *fx = fopen(xfile, "r");
+    FILE *fw = fopen(wfile, "r");
+    FILE *ft = fopen(tfile, "r");
+    if (!fx || !fw || !ft) {
+        fprintf(stderr, "Failed to load precomputed sequential files.\n");
+        exit(EXIT_FAILURE);
     }
+
+    for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
+    for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
+    fscanf(ft, "%lf", &time_seq);
+    fclose(fx); fclose(fw); fclose(ft);
 
     double *r = malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
-    double t0 = omp_get_wtime();
-    double *x = ccn_compute_points_new(n);
-    double *w = nc_compute_new(n, -1.0, +1.0, x);
-    rescale(a, b, n, x, w);
-    double t1 = omp_get_wtime();
-    double seq_time = t1 - t0;
-
     omp_set_num_threads(omp_get_max_threads());
-    double t2 = omp_get_wtime();
+    double t0 = omp_get_wtime();
     double *x2 = ccn_compute_points_new(n);
     double *w2 = nc_compute_new_tasks(n, -1.0, +1.0, x2);
     rescale(a, b, n, x2, w2);
-    double t3 = omp_get_wtime();
-    double par_time = t3 - t2;
+    double t1 = omp_get_wtime();
+    double par_time = t1 - t0;
 
     int ok = 1;
     for (int i = 0; i < n; i++) {
@@ -100,11 +108,21 @@ int main(int argc, char *argv[]) {
     }
 
     printf("\n%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("  %sSequential time: %s %fs %s\n", BOLD, CLEAR, seq_time, CLEAR);
-    printf("  %sParallel time:   %s %fs %s\n", BOLD, CLEAR, par_time, CLEAR);
-    printf("  %sSpeedup:         %s %.2f× %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
-    rule_write(n, filename, x2, w2, r);
+    printf("  %sSequential time: %s%.3fs %s\n", BOLD, BLUE, time_seq, CLEAR);
+    printf("  %sParallel time:   %s%.3fs %s\n", BOLD, BLUE, par_time, CLEAR);
+    printf("  %sSpeedup:         %s%.2fx %s\n", BOLD, BLUE, time_seq / par_time, CLEAR);
+    rule_write(n, out_prefix, x2, w2, r);
     printf("\n");
+
+    char time_out[300];
+    snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
+    FILE *fout = fopen(time_out, "w");
+    if (fout) {
+        fprintf(fout, "%.6f\n", par_time);
+        fclose(fout);
+    } else {
+        perror("fopen for OMP time");
+    }
 
     free(r);
     free(x);  free(w);

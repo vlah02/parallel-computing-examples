@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <time.h>
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 #include <cufft.h>
@@ -66,25 +65,38 @@ double *nc_compute_new_cuda(int n, double a, double b, double x[]) {
 void run_cuda(int argc, char *argv[]) {
     int n;
     double a, b;
-    char filename[256];
+    char out_prefix[256];
 
     if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
     if (argc >= 3) a = atof(argv[2]); else { printf("Enter A: "); scanf("%lf", &a); }
     if (argc >= 4) b = atof(argv[3]); else { printf("Enter B: "); scanf("%lf", &b); }
-    if (argc >= 5) strncpy(filename, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", filename); }
-    filename[255] = '\0';
+    if (argc >= 5) strncpy(out_prefix, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", out_prefix); }
+    out_prefix[255] = '\0';
 
-    double *r = (double *)malloc(2 * sizeof(double));
-    r[0] = a; r[1] = b;
+    const char *basename = strrchr(out_prefix, '/');
+    basename = (basename == NULL) ? out_prefix : basename + 1;
 
-    struct timespec t1, t2;
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-        double *x = ccn_compute_points_new(n);
-        double *w = nc_compute_new(n, -1.0, +1.0, x);
-        rescale(a, b, n, x, w);
-    clock_gettime(CLOCK_MONOTONIC, &t2);
+    char xfile[300], wfile[300], tfile[300];
+    snprintf(xfile, sizeof(xfile), "output/seq/%s_x.txt", basename);
+    snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
+    snprintf(tfile, sizeof(tfile), "output/seq/%s_time.txt", basename);
 
-    double time_seq = (t2.tv_sec - t1.tv_sec) * 1e3 + (t2.tv_nsec - t1.tv_nsec) / 1e6;
+    double *x = (double *)malloc(n * sizeof(double));
+    double *w = (double *)malloc(n * sizeof(double));
+    double time_seq;
+
+    FILE *fx = fopen(xfile, "r");
+    FILE *fw = fopen(wfile, "r");
+    FILE *ft = fopen(tfile, "r");
+    if (!fx || !fw || !ft) {
+        fprintf(stderr, "Failed to load precomputed sequential files.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
+    for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
+    fscanf(ft, "%lf", &time_seq);
+    fclose(fx); fclose(fw); fclose(ft);
 
     double *xx = ccn_compute_points_new(n);
     double *ww_warmup = nc_compute_new_cuda(n, a, b, xx);
@@ -93,14 +105,18 @@ void run_cuda(int argc, char *argv[]) {
     cudaEvent_t start, stop;
     cudaEventCreate(&start); cudaEventCreate(&stop);
     cudaEventRecord(start);
-        double *ww = nc_compute_new_cuda(n, a, b, xx);
+    double *ww = nc_compute_new_cuda(n, a, b, xx);
     cudaEventRecord(stop); cudaEventSynchronize(stop);
 
     float time_par;
     cudaEventElapsedTime(&time_par, start, stop);
+	time_par /= 1000.0;
 
     for (int i = 0; i < n; i++)
         xx[i] = ((a + b) + (b - a) * xx[i]) * 0.5;
+
+	double *r = (double *)malloc(2 * sizeof(double));
+    r[0] = a; r[1] = b;
 
     int ok = 1;
     for (int i = 0; i < n; i++) {
@@ -111,14 +127,23 @@ void run_cuda(int argc, char *argv[]) {
     }
 
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("%s  Sequential time: %s%.3fms %s\n", BOLD, BLUE, time_seq, CLEAR);
-    printf("%s  Parallel time:   %s%.3fms %s\n", BOLD, BLUE, time_par, CLEAR);
+    printf("%s  Sequential time: %s%.3fs %s\n", BOLD, BLUE, time_seq, CLEAR);
+    printf("%s  Parallel time:   %s%.3fs %s\n", BOLD, BLUE, time_par, CLEAR);
     printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, time_seq / time_par, CLEAR);
-    rule_write(n, filename, xx, ww, r);
-    printf("\n");
+    rule_write(n, out_prefix, xx, ww, r);
+	printf("\n");
 
-    free(r);
-    free(x); free(w); free(xx); cudaFreeHost(ww);
+    char time_out[300];
+    snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
+    FILE *fout = fopen(time_out, "w");
+    if (fout) {
+        fprintf(fout, "%.6f\n", time_par);
+        fclose(fout);
+    } else {
+        perror("fopen for CUDA time");
+    }
+
+    free(r); free(x); free(w); free(xx); cudaFreeHost(ww);
     cudaEventDestroy(start); cudaEventDestroy(stop);
 }
 

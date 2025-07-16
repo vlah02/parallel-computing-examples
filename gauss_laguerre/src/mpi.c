@@ -65,10 +65,9 @@ double *nc_compute_new_parallel(int n, double x_min, double x_max, double x[], i
 
 void run_mpi(int argc, char *argv[]) {
     double a, b, *r, *w, *ww, *x, *xx;
-    char filename[256];
+    char out_prefix[256];
     int n, rank, size;
-    double x_min, x_max;
-    double t1_seq, t2_seq, seq_time;
+    double seq_time;
     double t1_par, t2_par, par_time;
 
     MPI_Init(&argc, &argv);
@@ -86,32 +85,46 @@ void run_mpi(int argc, char *argv[]) {
         else { printf("Enter B: "); scanf("%lf", &b); }
 
         if (argc >= 5) {
-            strncpy(filename, argv[4], sizeof(filename) - 1);
-            filename[sizeof(filename) - 1] = '\0';
+            strncpy(out_prefix, argv[4], sizeof(out_prefix) - 1);
+            out_prefix[sizeof(out_prefix) - 1] = '\0';
         } else {
             printf("Enter root filename: ");
-            scanf("%s", filename);
+            scanf("%s", out_prefix);
         }
     }
 
     MPI_Bcast(&n, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
     MPI_Bcast(&a, 1, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
     MPI_Bcast(&b, 1, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(out_prefix, 256, MPI_CHAR, MASTER, MPI_COMM_WORLD);
+
+    const char *basename = strrchr(out_prefix, '/');
+    basename = (basename == NULL) ? out_prefix : basename + 1;
+
+    char xfile[300], wfile[300], tfile[300];
+    snprintf(xfile, sizeof(xfile), "output/seq/%s_x.txt", basename);
+    snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
+    snprintf(tfile, sizeof(tfile), "output/seq/%s_time.txt", basename);
 
     r = malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
-    if (rank == MASTER) {
-        t1_seq = MPI_Wtime();
-        x = ccn_compute_points_new(n);
-        x_min = -1.0; x_max = +1.0;
-        w = nc_compute_new(n, x_min, x_max, x);
-        rescale(a, b, n, x, w);
-        t2_seq = MPI_Wtime();
-        seq_time = t2_seq - t1_seq;
+    x = malloc(n * sizeof(double));
+    w = malloc(n * sizeof(double));
+    FILE *fx = fopen(xfile, "r");
+    FILE *fw = fopen(wfile, "r");
+    FILE *ft = fopen(tfile, "r");
+
+    if (!fx || !fw || !ft) {
+        if (rank == MASTER) fprintf(stderr, "Failed to open sequential files.\n");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
+    for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
+    fscanf(ft, "%lf", &seq_time);
+    fclose(fx); fclose(fw); fclose(ft);
+
     t1_par = MPI_Wtime();
 
     if (rank == MASTER) xx = ccn_compute_points_new(n);
@@ -120,36 +133,38 @@ void run_mpi(int argc, char *argv[]) {
     MPI_Bcast(xx, n, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
     ww = nc_compute_new_parallel(n, -1.0, +1.0, xx, rank, size);
 
-    if (rank == MASTER) rescale(a, b, n, xx, ww);
-
-    MPI_Barrier(MPI_COMM_WORLD);
-    t2_par = MPI_Wtime();
-    par_time = t2_par - t1_par;
-
     if (rank == MASTER) {
+        rescale(a, b, n, xx, ww);
+        t2_par = MPI_Wtime();
+        par_time = t2_par - t1_par;
+
         int ok = 1;
         for (int i = 0; i < n; i++) {
-            if (fabs(x[i] - xx[i]) > 1e-6) {
+            if (fabs(x[i] - xx[i]) > 1e-6 || fabs(w[i] - ww[i]) > 1e-6) {
                 ok = 0;
                 break;
             }
         }
 
         printf("\n%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-        printf("%s  Sequential time:%s %fs %s\n", BOLD, CLEAR, seq_time, CLEAR);
-        printf("%s  Parallel time:  %s %fs %s\n", BOLD, CLEAR, par_time, CLEAR);
-        printf("%s  Speedup:        %s %.2fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
-        rule_write(n, filename, xx, ww, r);
-        printf("\n");
+        printf("%s  Sequential time: %s%.3fs %s\n", BOLD, BLUE, seq_time, CLEAR);
+        printf("%s  Parallel time:   %s%.3fs %s\n", BOLD, BLUE, par_time, CLEAR);
+        printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
+        rule_write(n, out_prefix, xx, ww, r);
+		printf("\n");
+
+        char time_out[300];
+        snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
+        FILE *fout = fopen(time_out, "w");
+        if (fout) {
+            fprintf(fout, "%.6f\n", par_time);
+            fclose(fout);
+        } else {
+            perror("fopen for MPI time");
+        }
     }
 
-    free(r);
-    if (rank == MASTER) {
-        free(x);
-        free(w);
-    }
-    free(xx);
-    free(ww);
+    free(r); free(x); free(w); free(xx); free(ww);
     MPI_Finalize();
 }
 

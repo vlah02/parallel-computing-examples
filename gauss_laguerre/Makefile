@@ -7,6 +7,7 @@ NVCC    := nvcc
 OMPFLAGS     := -fopenmp
 MPI_LDFLAGS  := -lm
 CUDA_LDFLAGS := -lm -lcufft
+CUDA_WARNFLAGS := -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
 
 # Output directory
 BIN_DIR := bin
@@ -33,7 +34,7 @@ omp: | $(BIN_DIR)
 
 # CUDA
 cuda: | $(BIN_DIR)
-	$(NVCC) -O3 src/cuda.cu src/common.c -o $(BIN_DIR)/cuda $(CUDA_LDFLAGS)
+	$(NVCC) -O3 $(CUDA_WARNFLAGS) src/cuda.cu src/common.c -o $(BIN_DIR)/cuda $(CUDA_LDFLAGS)
 
 clean:
 	rm -rf $(BIN_DIR)/*

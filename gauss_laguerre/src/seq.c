@@ -56,6 +56,17 @@ void run_sequential(int argc, char *argv[]) {
     rule_write(n, filename, x, w, r);
     printf("\n");
 
+	char time_filename[300];
+	snprintf(time_filename, sizeof(time_filename), "%s_time.txt", filename);
+
+	FILE *f = fopen(time_filename, "w");
+	if (!f) {
+    	perror("fopen");
+	} else {
+    	fprintf(f, "%.6f\n", elapsed);
+    	fclose(f);
+	}
+
     free(r);
     free(x);
     free(w);
