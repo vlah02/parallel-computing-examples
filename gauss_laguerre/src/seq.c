@@ -59,7 +59,7 @@ void run_sequential(int argc, char *argv[]) {
 	char time_filename[300];
 	snprintf(time_filename, sizeof(time_filename), "%s_time.txt", filename);
 
-	FILE *f = fopen(time_filename, "w");
+	FILE *f = fopen(time_filename, "a");
 	if (!f) {
     	perror("fopen");
 	} else {

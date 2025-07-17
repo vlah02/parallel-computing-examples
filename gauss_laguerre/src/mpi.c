@@ -122,7 +122,20 @@ void run_mpi(int argc, char *argv[]) {
 
     for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
     for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
-    fscanf(ft, "%lf", &seq_time);
+
+    seq_time = 0.0;
+    int time_count = 0;
+    double tval;
+    while (fscanf(ft, "%lf", &tval) == 1) {
+        seq_time += tval;
+        time_count++;
+    }
+    if (time_count == 0) {
+        if (rank == MASTER) fprintf(stderr, "No times found in %s\n", tfile);
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+    seq_time /= time_count;
+
     fclose(fx); fclose(fw); fclose(ft);
 
     t1_par = MPI_Wtime();
@@ -151,11 +164,11 @@ void run_mpi(int argc, char *argv[]) {
         printf("%s  Parallel time:   %s%.3fs %s\n", BOLD, BLUE, par_time, CLEAR);
         printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
         rule_write(n, out_prefix, xx, ww, r);
-		printf("\n");
+        printf("\n");
 
         char time_out[300];
         snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
-        FILE *fout = fopen(time_out, "w");
+        FILE *fout = fopen(time_out, "a");
         if (fout) {
             fprintf(fout, "%.6f\n", par_time);
             fclose(fout);

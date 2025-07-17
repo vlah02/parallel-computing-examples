@@ -73,7 +73,6 @@ int main(int argc, char *argv[]) {
 
     double *x = (double *)malloc(n * sizeof(double));
     double *w = (double *)malloc(n * sizeof(double));
-    double time_seq;
 
     FILE *fx = fopen(xfile, "r");
     FILE *fw = fopen(wfile, "r");
@@ -85,7 +84,20 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
     for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
-    fscanf(ft, "%lf", &time_seq);
+
+	double time_seq = 0.0;
+	int time_count = 0;
+	double tval;
+	while (fscanf(ft, "%lf", &tval) == 1) {
+    	time_seq += tval;
+    	time_count++;
+	}
+	if (time_count == 0) {
+    	fprintf(stderr, "No times found in file %s\n", tfile);
+    	exit(EXIT_FAILURE);
+	}
+	time_seq /= time_count;
+
     fclose(fx); fclose(fw); fclose(ft);
 
     double *r = malloc(2 * sizeof(double));
@@ -116,7 +128,7 @@ int main(int argc, char *argv[]) {
 
     char time_out[300];
     snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
-    FILE *fout = fopen(time_out, "w");
+    FILE *fout = fopen(time_out, "a");
     if (fout) {
         fprintf(fout, "%.6f\n", par_time);
         fclose(fout);
