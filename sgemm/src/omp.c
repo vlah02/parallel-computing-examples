@@ -13,7 +13,7 @@
 #define BOLD    "\033[1m"
 #define CLEAR   "\033[0m"
 
-void parallelSgemm(
+void sgemm(
     char transa, char transb,
     int  m,      int  n,      int  k,
     float alpha,
@@ -25,7 +25,7 @@ void parallelSgemm(
     if ((transa != 'N' && transa != 'n') ||
         (transb != 'T' && transb != 't'))
     {
-        fprintf(stderr, "parallelSgemm: unsupported transpose options\n");
+        fprintf(stderr, "sgemm: unsupported transpose options\n");
         return;
     }
     int num_threads = omp_get_max_threads();
@@ -111,7 +111,7 @@ void run_omp(int argc, char *argv[]) {
 
     std::vector<float> C_omp(m*n, 0.0f);
     double t0 = omp_get_wtime();
-    parallelSgemm(
+    sgemm(
         'N','T',
         m, n, k,
         1.0f,

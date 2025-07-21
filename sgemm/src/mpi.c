@@ -15,7 +15,7 @@
 
 #define MASTER 0
 
-void parallelSgemm(char transa, char transb,
+void sgemm(char transa, char transb,
                    int m, int n, int k,
                    float alpha,
                    const float *A, int lda,
@@ -28,7 +28,7 @@ void parallelSgemm(char transa, char transb,
         (transb != 'T' && transb != 't'))
     {
         if (rank == MASTER)
-            fprintf(stderr, "parallelSgemm: unsupported transpose option\n");
+            fprintf(stderr, "sgemm: unsupported transpose option\n");
         return;
     }
 
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 
     std::vector<float> C_vec(m * n, 0.0f);
     double t0 = MPI_Wtime();
-    parallelSgemm('N','T',
+    sgemm('N','T',
                   m, n, k,
                   1.0f,
                   A_vec.data(),  m,

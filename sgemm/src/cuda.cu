@@ -15,7 +15,7 @@
 
 #define TILE_WIDTH 32
 
-__global__ void kernelSgemm(
+__global__ void kernel(
     const float *A, int lda,
     const float *BT, int ldb,
           float *C,  int ldc,
@@ -55,7 +55,7 @@ __global__ void kernelSgemm(
     }
 }
 
-void cudaSgemm(
+void sgemm(
     int    m, int n, int k,
     float  alpha,
     const float *A, int lda,
@@ -81,7 +81,7 @@ void cudaSgemm(
     dim3 block(TILE_WIDTH, TILE_WIDTH);
 
     cudaEventRecord(start, 0);
-    kernelSgemm<<<grid,block>>>(dA, lda, dBT, ldb, dC, ldc,
+    kernel<<<grid,block>>>(dA, lda, dBT, ldb, dC, ldc,
                                 alpha, beta, m, n, k);
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
@@ -152,7 +152,7 @@ int main(int argc, char *argv[]) {
 
     std::vector<float> C_gpu(m*n, 0.0f);
     float gpu_ms = 0.0f;
-    cudaSgemm(
+    sgemm(
         m, n, k,
         1.0f,
         matA .data(), m,

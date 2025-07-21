@@ -11,7 +11,7 @@
 #define BOLD    "\033[1m"
 #define CLEAR   "\033[0m"
 
-void basicSgemm(
+void sgemm(
     char transa, char transb,
     int  m,      int  n,      int  k,
     float alpha,
@@ -23,7 +23,7 @@ void basicSgemm(
     if ((transa != 'N' && transa != 'n') ||
         (transb != 'T' && transb != 't'))
     {
-        fprintf(stderr, "basicSgemm: unsupported transpose options\n");
+        fprintf(stderr, "sgemm: unsupported transpose options\n");
         return;
     }
     for (int mm = 0; mm < m; ++mm) {
@@ -67,7 +67,7 @@ void run_sequential(int argc, char *argv[]) {
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
-    basicSgemm(
+    sgemm(
         'N','T',
         m, n, k,
         1.0f,
