@@ -1,12 +1,16 @@
-#include "../include/seq.h"
-#include "../include/common.h"
-
 #include <vector>
 #include <ctime>
 #include <cstdlib>
 #include <cstdio>
 
-// Basic CPU SGEMM implementation, timed outside.
+#include "../include/common.h"
+
+#define RED     "\033[1;31m"
+#define GREEN   "\033[1;32m"
+#define BLUE    "\033[1;36m"
+#define BOLD    "\033[1m"
+#define CLEAR   "\033[0m"
+
 void basicSgemm(
     char transa, char transb,
     int  m,      int  n,      int  k,
@@ -25,7 +29,6 @@ void basicSgemm(
     for (int mm = 0; mm < m; ++mm) {
         for (int nn = 0; nn < n; ++nn) {
             float acc = 0.0f;
-            // inner product
             for (int i = 0; i < k; ++i) {
                 acc += A[ mm + i*lda ]
                      * B[ nn + i*ldb ];
@@ -59,7 +62,6 @@ void run_sequential(int argc, char *argv[]) {
         exit(1);
     }
 
-    // prepare C
     std::vector<float> C(m * n, 0.0f);
 
     struct timespec t0, t1;
@@ -80,12 +82,10 @@ void run_sequential(int argc, char *argv[]) {
         (t1.tv_sec  - t0.tv_sec)
       + (t1.tv_nsec - t0.tv_nsec)*1e-9;
 
-    printf("Sequential time: %.6f seconds\n", elapsed);
-
-    // write C to <outroot>
+    printf("%s  Sequential time: %s%.6f s %s\n", BOLD, BLUE, elapsed, CLEAR);
     writeColMajorMatrixFile(outroot, m, n, C);
+	printf("\n");
 
-    // append timing
     char tf[512];
     snprintf(tf, sizeof(tf), "%s_time.txt", outroot);
     FILE *f = fopen(tf, "a");

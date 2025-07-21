@@ -20,7 +20,7 @@ void parallelSgemm(char transa, char transb, int m, int n, int k, float alpha,
         int end = start + chunk_size + (leftover_size > thread_id ? 1 : 0);
 
         for (int mm = start; mm < end; ++mm) {
-            for (int nn = 0; nn < n; ++nn) {
+            for (int nn = 0; nn < n; ++nn) { 
                 float c = 0.0f;
                 for (int i = 0; i < k; ++i) {
                     float a = A[mm + i * lda];
