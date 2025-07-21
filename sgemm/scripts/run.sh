@@ -5,9 +5,7 @@ runs=${1:-1}
 sizes=(small medium)
 
 make clean
-make seq
-make mpi
-make cuda
+make
 
 mkdir -p output
 for variant in seq mpi omp cuda; do
@@ -24,6 +22,14 @@ for ((i = 1; i <= runs; i++)); do
       data/${size}/input/matrix2t.txt \
       output/seq/result_${size}.txt
   done
+done
+
+for size in "${sizes[@]}"; do
+  echo "==> Running OpenMP on ${size}"
+  ./bin/omp \
+    data/${size}/input/matrix1.txt \
+    data/${size}/input/matrix2t.txt \
+    output/omp/result_${size}.txt
 done
 
 for size in "${sizes[@]}"; do

@@ -120,8 +120,7 @@ int main(int argc, char *argv[])
         if (char *dot = strchr(base, '.')) *dot = '\0';
 
         char seqtime[512];
-        snprintf(seqtime, sizeof(seqtime),
-                 "output/seq/%s.txt_time.txt", base);
+        snprintf(seqtime, sizeof(seqtime), "output/seq/%s.txt_time.txt", base);
         FILE *fs = fopen(seqtime, "r");
         if (!fs) {
             fprintf(stderr, "Error: cannot open \"%s\"\n", seqtime);

@@ -30,7 +30,7 @@ mpi: | $(BIN_DIR)
 
 # OpenMP
 omp: | $(BIN_DIR)
-	$(CXX) $(OMPFLAGS) src/omp.c src/common.c -o $(BIN_DIR)/omp -lm
+	$(CXX) $(OMPFLAGS) src/omp.c src/common.cpp -o $(BIN_DIR)/omp -lm
 
 # CUDA
 cuda: | $(BIN_DIR)
