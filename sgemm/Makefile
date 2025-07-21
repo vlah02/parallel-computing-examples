@@ -1,6 +1,6 @@
 # Tools
 CXX     := g++
-MPI_CC  := mpicc
+MPI_CC  := mpicxx
 NVCC    := nvcc
 
 # Flags
@@ -26,7 +26,7 @@ seq: | $(BIN_DIR)
 
 # MPI
 mpi: | $(BIN_DIR)
-	$(MPI_CC) src/mpi.c src/common.c -o $(BIN_DIR)/mpi $(MPI_LDFLAGS)
+	$(MPI_CC) src/mpi.c src/common.cpp -o $(BIN_DIR)/mpi $(MPI_LDFLAGS)
 
 # OpenMP
 omp: | $(BIN_DIR)

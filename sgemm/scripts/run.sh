@@ -6,6 +6,7 @@ sizes=(small medium)
 
 make clean
 make seq
+make mpi
 make cuda
 
 mkdir -p output
@@ -23,6 +24,14 @@ for ((i = 1; i <= runs; i++)); do
       data/${size}/input/matrix2t.txt \
       output/seq/result_${size}.txt
   done
+done
+
+for size in "${sizes[@]}"; do
+  echo "==> Running MPI on ${size}"
+  mpirun -np 8 ./bin/mpi \
+    data/${size}/input/matrix1.txt \
+    data/${size}/input/matrix2t.txt \
+    output/mpi/result_${size}.txt
 done
 
 for size in "${sizes[@]}"; do
