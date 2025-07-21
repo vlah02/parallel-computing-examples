@@ -46,7 +46,7 @@ void run_omp(int argc, char *argv[]) {
 
     float *A = NULL, *BT = NULL, *C = NULL;
     read_matrix(fileA, &matArow, &matAcol, &A);
-    read_matrix(fileB, &matBcol, &matBrow, &BT);  // B is transposed, so cols are rows
+    read_matrix(fileB, &matBcol, &matBrow, &BT);
 
     C = (float *)malloc(matArow * matBcol * sizeof(float));
     if (!C) { perror("malloc C"); exit(EXIT_FAILURE); }

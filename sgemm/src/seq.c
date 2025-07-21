@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-#include "../include/common.h"
+#include "../include/common.hpp"
 
 #define RED     "\033[1;31m"
 #define GREEN   "\033[1;32m"

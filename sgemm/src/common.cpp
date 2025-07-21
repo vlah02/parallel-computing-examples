@@ -1,11 +1,7 @@
-#include "../include/common.h"
 #include <fstream>
 #include <iostream>
 
-std::string red = "\033[1;31m";
-std::string green = "\033[1;32m";
-std::string blue = "\033[1;36m";
-std::string clear = "\033[0m";
+#include "../include/common.hpp"
 
 bool readColMajorMatrixFile(const char *fn, int &nr_row, int &nr_col, std::vector<float> &v) {
 //    std::cerr << "Opening file: " << fn << std::endl;
