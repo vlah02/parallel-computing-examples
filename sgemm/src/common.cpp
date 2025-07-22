@@ -35,7 +35,6 @@ bool writeColMajorMatrixFile(const char *fn, int nr_row, int nr_col, const std::
     return true;
 }
 
-
 void getOutputBase(const char *root, char *base, size_t len) {
     const char *slash = strrchr(root, '/');
     const char *name = slash ? slash+1 : root;
