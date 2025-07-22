@@ -2,14 +2,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstdio>
-
 #include "../include/common.hpp"
-
-#define RED     "\033[1;31m"
-#define GREEN   "\033[1;32m"
-#define BLUE    "\033[1;36m"
-#define BOLD    "\033[1m"
-#define CLEAR   "\033[0m"
 
 void sgemm(
     char transa, char transb,
@@ -39,7 +32,7 @@ void sgemm(
     }
 }
 
-void run_sequential(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     if (argc < 4) {
         fprintf(stderr,
                 "Usage: %s <A.txt> <BT.txt> <output_root>\n", argv[0]);
@@ -84,20 +77,11 @@ void run_sequential(int argc, char *argv[]) {
 
     printf("%s  Sequential time: %s%.6f s %s\n", BOLD, BLUE, elapsed, CLEAR);
     writeColMajorMatrixFile(outroot, m, n, C);
-	printf("\n");
+    printf("\n");
 
-    char tf[512];
-    snprintf(tf, sizeof(tf), "%s_time.txt", outroot);
-    FILE *f = fopen(tf, "a");
-    if (f) {
-        fprintf(f, "%.6f\n", elapsed);
-        fclose(f);
-    } else {
-        perror("fopen timefile");
-    }
-}
+    char base[256];
+    getOutputBase(outroot, base, sizeof(base));
+    appendTiming(outroot, elapsed);
 
-int main(int argc, char *argv[]) {
-    run_sequential(argc, argv);
     return 0;
 }
