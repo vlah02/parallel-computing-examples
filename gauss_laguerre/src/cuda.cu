@@ -1,6 +1,3 @@
-#include "../include/common.h"
-#include "../include/cuda.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,11 +6,7 @@
 #include <cuda_profiler_api.h>
 #include <cufft.h>
 
-#define RED     "\033[1;31m"
-#define GREEN   "\033[1;32m"
-#define BLUE    "\033[1;36m"
-#define BOLD    "\033[1m"
-#define CLEAR   "\033[0m"
+#include "../include/common.hpp"
 
 __global__ void extract_and_linearscale(cufftDoubleComplex *Y, double *w, int n, double a, double b) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -25,8 +18,7 @@ __global__ void extract_and_linearscale(cufftDoubleComplex *Y, double *w, int n,
     w[i] = scale * Y[i].x * ((b - a) * 0.5);
 }
 
-extern "C"
-double *nc_compute_new_cuda(int n, double a, double b, double x[]) {
+double *nc_compute_new(int n, double a, double b, double x[]) {
     int Nfft = 2 * n;
     double *d_y;
     cufftDoubleComplex *d_Y;
@@ -62,7 +54,7 @@ double *nc_compute_new_cuda(int n, double a, double b, double x[]) {
     return h_w;
 }
 
-void run_cuda(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     int n;
     double a, b;
     char out_prefix[256];
@@ -111,13 +103,13 @@ void run_cuda(int argc, char *argv[]) {
     fclose(fx); fclose(fw); fclose(ft);
 
     double *xx = ccn_compute_points_new(n);
-    double *ww_warmup = nc_compute_new_cuda(n, a, b, xx);
+    double *ww_warmup = nc_compute_new(n, a, b, xx);
     cudaFreeHost(ww_warmup);
 
     cudaEvent_t start, stop;
     cudaEventCreate(&start); cudaEventCreate(&stop);
     cudaEventRecord(start);
-    double *ww = nc_compute_new_cuda(n, a, b, xx);
+    double *ww = nc_compute_new(n, a, b, xx);
     cudaEventRecord(stop); cudaEventSynchronize(stop);
 
     float time_par;
@@ -157,9 +149,5 @@ void run_cuda(int argc, char *argv[]) {
 
     free(r); free(x); free(w); free(xx); cudaFreeHost(ww);
     cudaEventDestroy(start); cudaEventDestroy(stop);
-}
-
-int main(int argc, char *argv[]) {
-    run_cuda(argc, argv);
     return 0;
 }

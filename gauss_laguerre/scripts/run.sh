@@ -12,6 +12,8 @@ for variant in seq mpi omp cuda; do
   mkdir -p output/$variant
 done
 
+echo
+
 echo "==> Running sequential version"
 for ((i = 1; i <= runs; i++)); do
   for N in "${orders[@]}"; do
@@ -37,17 +39,6 @@ echo "==> Running CUDA version"
 for N in "${orders[@]}"; do
   printf "  N=%-4d  " "$N"
   ./bin/cuda $N -100 +100 output/cuda/ccn_o${N}
-done
-
-echo "==> Appending timing logs to gauss_laguerre_times.txt"
-for variant in seq mpi omp cuda; do
-  for f in output/$variant/*_time.txt; do
-    if [[ -f "$f" ]]; then
-      echo "$variant $(basename "$f")" >> gauss_laguerre_times.txt
-      cat "$f" >> gauss_laguerre_times.txt
-      echo "" >> gauss_laguerre_times.txt
-    fi
-  done
 done
 
 echo "All done!"

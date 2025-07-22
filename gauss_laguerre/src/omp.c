@@ -4,16 +4,9 @@
 #include <math.h>
 #include <omp.h>
 
-#include "../include/common.h"
-#include "../include/omp.h"
+#include "../include/common.hpp"
 
-#define RED     "\033[1;31m"
-#define GREEN   "\033[1;32m"
-#define BLUE    "\033[1;36m"
-#define BOLD    "\033[1m"
-#define CLEAR   "\033[0m"
-
-double *nc_compute_new_tasks(int n, double x_min, double x_max, double x[]) {
+double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
     double *w = (double *)malloc(n * sizeof(double));
 #pragma omp parallel
     {
@@ -65,7 +58,6 @@ int main(int argc, char *argv[]) {
     const char *basename = strrchr(out_prefix, '/');
     basename = (basename == NULL) ? out_prefix : basename + 1;
 
-    // Load sequential reference data
     char xfile[300], wfile[300], tfile[300];
     snprintf(xfile, sizeof(xfile), "output/seq/%s_x.txt", basename);
     snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
@@ -100,13 +92,13 @@ int main(int argc, char *argv[]) {
 
     fclose(fx); fclose(fw); fclose(ft);
 
-    double *r = malloc(2 * sizeof(double));
+    double *r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
     omp_set_num_threads(omp_get_max_threads());
     double t0 = omp_get_wtime();
     double *x2 = ccn_compute_points_new(n);
-    double *w2 = nc_compute_new_tasks(n, -1.0, +1.0, x2);
+    double *w2 = nc_compute_new(n, -1.0, +1.0, x2);
     rescale(a, b, n, x2, w2);
     double t1 = omp_get_wtime();
     double par_time = t1 - t0;

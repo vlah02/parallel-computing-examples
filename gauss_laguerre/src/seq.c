@@ -3,10 +3,42 @@
 #include <string.h>
 #include <time.h>
 
-#include "../include/seq.h"
-#include "../include/common.h"
+#include "../include/common.hpp"
 
-void run_sequential(int argc, char *argv[]) {
+double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
+    double *d = (double*)malloc(n * sizeof(double));
+    double *w = (double*)malloc(n * sizeof(double));
+    if (!d || !w) { perror("malloc"); exit(1); }
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) d[j] = 0.0;
+        d[i] = 1.0;
+
+        for (int j = 2; j <= n; j++) {
+            for (int k = j; k <= n; k++) {
+                int idx = n + j - k - 1;
+                d[idx] = (d[idx-1] - d[idx]) / (x[n+1-k-1] - x[idx]);
+            }
+        }
+        for (int j = 1; j <= n-1; j++) {
+            for (int k = 1; k <= n-j; k++) {
+                d[n-k-1] -= x[n-k-j] * d[n-k];
+            }
+        }
+
+        double yvala = d[n-1]/n, yvalb = yvala;
+        for (int j = n-2; j >= 0; j--) {
+            yvala = yvala * x_min + d[j]/(j+1);
+            yvalb = yvalb * x_max + d[j]/(j+1);
+        }
+        w[i] = yvalb * x_max - yvala * x_min;
+    }
+
+    free(d);
+    return w;
+}
+
+int main(int argc, char *argv[]) {
     double a, b;
     int    n;
     char   filename[256];
@@ -40,7 +72,7 @@ void run_sequential(int argc, char *argv[]) {
         scanf("%s", filename);
     }
 
-    double *r = malloc(2 * sizeof(double));
+    double *r = (double*)malloc(2 * sizeof(double));
     if (!r) { perror("malloc"); exit(1); }
     r[0] = a; r[1] = b;
 
@@ -70,9 +102,6 @@ void run_sequential(int argc, char *argv[]) {
     free(r);
     free(x);
     free(w);
-}
 
-int main(int argc, char *argv[]) {
-    run_sequential(argc, argv);
     return 0;
 }

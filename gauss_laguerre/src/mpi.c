@@ -4,18 +4,11 @@
 #include <string.h>
 #include <mpi.h>
 
-#include "../include/common.h"
-#include "../include/mpi.h"
+#include "../include/common.hpp"
 
 #define MASTER 0
 
-#define RED     "\033[1;31m"
-#define GREEN   "\033[1;32m"
-#define BLUE    "\033[1;36m"
-#define BOLD    "\033[1m"
-#define CLEAR   "\033[0m"
-
-double *nc_compute_new_parallel(int n, double x_min, double x_max, double x[], int rank, int size) {
+double *nc_compute_new(int n, double x_min, double x_max, double x[], int rank, int size) {
     int chunk_size = n / size;
     int local_count = chunk_size;
     int starting_index = rank * chunk_size;
@@ -63,7 +56,7 @@ double *nc_compute_new_parallel(int n, double x_min, double x_max, double x[], i
     return ww;
 }
 
-void run_mpi(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     double a, b, *r, *w, *ww, *x, *xx;
     char out_prefix[256];
     int n, rank, size;
@@ -106,11 +99,11 @@ void run_mpi(int argc, char *argv[]) {
     snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
     snprintf(tfile, sizeof(tfile), "output/seq/%s_time.txt", basename);
 
-    r = malloc(2 * sizeof(double));
+    r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
-    x = malloc(n * sizeof(double));
-    w = malloc(n * sizeof(double));
+    x = (double *)malloc(n * sizeof(double));
+    w = (double *)malloc(n * sizeof(double));
     FILE *fx = fopen(xfile, "r");
     FILE *fw = fopen(wfile, "r");
     FILE *ft = fopen(tfile, "r");
@@ -141,10 +134,10 @@ void run_mpi(int argc, char *argv[]) {
     t1_par = MPI_Wtime();
 
     if (rank == MASTER) xx = ccn_compute_points_new(n);
-    else xx = malloc(n * sizeof(double));
+    else xx = (double *)malloc(n * sizeof(double));
 
     MPI_Bcast(xx, n, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-    ww = nc_compute_new_parallel(n, -1.0, +1.0, xx, rank, size);
+    ww = nc_compute_new(n, -1.0, +1.0, xx, rank, size);
 
     if (rank == MASTER) {
         rescale(a, b, n, xx, ww);
@@ -179,9 +172,6 @@ void run_mpi(int argc, char *argv[]) {
 
     free(r); free(x); free(w); free(xx); free(ww);
     MPI_Finalize();
-}
 
-int main(int argc, char *argv[]) {
-    run_mpi(argc, argv);
     return 0;
 }
