@@ -1,10 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <mpi.h>
-
 #include "../include/common.hpp"
+#include <mpi.h>
 
 #define MASTER 0
 

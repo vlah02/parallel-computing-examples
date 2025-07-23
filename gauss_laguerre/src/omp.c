@@ -1,10 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-#include <omp.h>
-
 #include "../include/common.hpp"
+#include <omp.h>
 
 double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
     double *w = (double *)malloc(n * sizeof(double));

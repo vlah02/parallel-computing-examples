@@ -1,9 +1,5 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-
 #include "../include/common.hpp"
+#include <time.h>
 
 double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
     double *d = (double*)malloc(n * sizeof(double));

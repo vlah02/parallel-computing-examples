@@ -1,12 +1,7 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include "../include/common.hpp"
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 #include <cufft.h>
-
-#include "../include/common.hpp"
 
 __global__ void extract_and_linearscale(cufftDoubleComplex *Y, double *w, int n, double a, double b) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;

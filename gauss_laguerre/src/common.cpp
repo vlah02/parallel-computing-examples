@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
-
 #include "../include/common.hpp"
 
 void r8mat_write(char *output_filename, int m, int n, double table[]) {
