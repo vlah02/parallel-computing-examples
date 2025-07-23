@@ -100,12 +100,13 @@ int main(int argc, char *argv[]) {
 
     int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
 
+	printf("\n");
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
     printf("%s  Sequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
     printf("%s  Parallel time:   %s%.6fs %s\n", BOLD, BLUE, par_time, CLEAR);
     printf("%s  Speedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
-    rule_write(n, out_prefix, x_calc, w_calc, r);
 	printf("\n");
+    rule_write(n, out_prefix, x_calc, w_calc, r);
 	appendTiming(out_prefix, par_time);
 
     free(r);
