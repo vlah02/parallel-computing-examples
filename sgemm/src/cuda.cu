@@ -1,8 +1,5 @@
-#include <vector>
-#include <string>
-#include <iostream>
-#include <cuda_runtime.h>
 #include "../include/common.hpp"
+#include <cuda_runtime.h>
 
 #define TILE_WIDTH 32
 
