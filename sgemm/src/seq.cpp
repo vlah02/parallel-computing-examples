@@ -2,79 +2,79 @@
 #include <chrono>
 
 void sgemm(
-    char transa, char transb,
-    int  m,      int  n,      int  k,
+    char transA, char transB,
+    int numRowsA, int numColsB, int sharedDim,
     float alpha,
-    const float *A, int lda,
-    const float *B, int ldb,
+    const float* matA, int lda,
+    const float* matBT, int ldb,
     float beta,
-    float *C,       int ldc
+    float* matC, int ldc
 ) {
-    if ((transa != 'N' && transa != 'n') ||
-        (transb != 'T' && transb != 't'))
+    if ((transA != 'N' && transA != 'n') ||
+        (transB != 'T' && transB != 't'))
     {
         std::cerr << "sgemm: unsupported transpose options\n";
         return;
     }
-    for (int mm = 0; mm < m; ++mm) {
-        for (int nn = 0; nn < n; ++nn) {
+    for (int i = 0; i < numRowsA; ++i) {
+        for (int j = 0; j < numColsB; ++j) {
             float acc = 0.0f;
-            for (int i = 0; i < k; ++i) {
-                acc += A[mm + i*lda] * B[nn + i*ldb];
+            for (int t = 0; t < sharedDim; ++t) {
+                acc += matA[i + t*lda] * matBT[j + t*ldb];
             }
-            C[mm + nn*ldc] = beta * C[mm + nn*ldc] + alpha * acc;
+            matC[i + j*ldc] = beta * matC[i + j*ldc] + alpha * acc;
         }
     }
 }
 
-int main(int argc, char *argv[]) {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <A.txt> <BT.txt> <output_root>\n";
+int main(int argc, char* argv[]) {
+    if (argc != 4) {
+        std::cerr << "Usage: " << argv[0] << " A.txt BT.txt output_root" << std::endl;
         return 1;
     }
 
-    std::string fileA   = argv[1];
-    std::string fileBT  = argv[2];
-    std::string outroot = argv[3];
+    std::string matAFile   = argv[1];
+    std::string matBTFile  = argv[2];
+    std::string outputRoot = argv[3];
 
-    int m, k, n, k2;
-    std::vector<float> A, BT;
+    int numRowsA, numColsA, numColsB, numRowsB;
+    std::vector<float> matA, matBT;
 
-    if (!readColMajorMatrixFile(fileA,  m,  k,  A)) {
-        std::cerr << "Failed to load A from " << fileA << std::endl;
+    if (!readColMajorMatrixFile(matAFile, numRowsA, numColsA, matA)) {
+        std::cerr << "Failed to load A from " << matAFile << std::endl;
         return 1;
     }
-    if (!readColMajorMatrixFile(fileBT, n, k2, BT)) {
-        std::cerr << "Failed to load Bᵀ from " << fileBT << std::endl;
+    if (!readColMajorMatrixFile(matBTFile, numColsB, numRowsB, matBT)) {
+        std::cerr << "Failed to load Bᵀ from " << matBTFile << std::endl;
         return 1;
     }
-    if (k != k2) {
-        std::cerr << "Dimension mismatch: k=" << k << " vs k2=" << k2 << std::endl;
+    if (numColsA != numRowsB) {
+        std::cerr << "Dimension mismatch: numColsA=" << numColsA << " vs numRowsB=" << numRowsB << std::endl;
         return 1;
     }
+    int sharedDim = numColsA;
 
-    std::vector<float> C(m * n, 0.0f);
+    std::vector<float> matC(numRowsA * numColsB, 0.0f);
 
     auto t0 = std::chrono::steady_clock::now();
 
     sgemm(
-        'N','T',
-        m, n, k,
+        'N', 'T',
+        numRowsA, numColsB, sharedDim,
         1.0f,
-        A.data(),  m,
-        BT.data(), n,
+        matA.data(), numRowsA,
+        matBT.data(), numColsB,
         0.0f,
-        C.data(),  m
+        matC.data(), numRowsA
     );
 
     auto t1 = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(t1 - t0).count();
 
     std::cout << BOLD << "  Sequential time: " << BLUE << elapsed << " s " << CLEAR << std::endl;
-    writeColMajorMatrixFile(outroot, m, n, C);
+    writeColMajorMatrixFile(outputRoot, numRowsA, numColsB, matC);
 
-    std::string base = getOutputBase(outroot);
-    appendTiming(outroot, elapsed);
+    appendTiming(outputRoot, elapsed);
 
     std::cout << std::endl;
     return 0;

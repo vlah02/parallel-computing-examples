@@ -4,45 +4,45 @@
 #define MASTER 0
 
 void sgemm(
-    char transa, char transb,
-    int m, int n, int k,
+    char transA, char transB,
+    int numRowsA, int numColsB, int sharedDim,
     float alpha,
-    const float *A, int lda,
-    const float *B, int ldb,
+    const float* matA, int lda,
+    const float* matBT, int ldb,
     float beta,
-    float *C, int ldc,
+    float* matC, int ldc,
     int rank, int size
 ) {
-    if ((transa != 'N' && transa != 'n') ||
-        (transb != 'T' && transb != 't'))
+    if ((transA != 'N' && transA != 'n') ||
+        (transB != 'T' && transB != 't'))
     {
         if (rank == MASTER)
             std::cerr << "sgemm: unsupported transpose option" << std::endl;
         return;
     }
 
-    int chunk = m / size;
-    int rem   = m % size;
+    int chunk = numRowsA / size;
+    int rem   = numRowsA % size;
     int start = chunk * rank + (rem > rank ? rank : rem);
     int end   = start + chunk + (rem > rank ? 1 : 0);
 
-    std::vector<float> localC(m * n, 0.0f);
+    std::vector<float> localC(numRowsA * numColsB, 0.0f);
 
     for (int i = start; i < end; ++i) {
-        for (int j = 0; j < n; ++j) {
-            float sum = 0.0f;
-            for (int t = 0; t < k; ++t) {
-                sum += A[i + t*lda] * B[j + t*ldb];
+        for (int j = 0; j < numColsB; ++j) {
+            float acc = 0.0f;
+            for (int t = 0; t < sharedDim; ++t) {
+                acc += matA[i + t*lda] * matBT[j + t*ldb];
             }
             localC[i + j*ldc] = beta * localC[i + j*ldc]
-                              + alpha * sum;
+                              + alpha * acc;
         }
     }
 
-    MPI_Reduce(localC.data(), C, m * n, MPI_FLOAT, MPI_SUM, MASTER, MPI_COMM_WORLD);
+    MPI_Reduce(localC.data(), matC, numRowsA * numColsB, MPI_FLOAT, MPI_SUM, MASTER, MPI_COMM_WORLD);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     MPI_Init(&argc, &argv);
 
     int rank, size;
@@ -56,73 +56,80 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::string fnameA = argv[1], fnameBT = argv[2], out_root = argv[3];
+    std::string matAFile = argv[1];
+    std::string matBTFile = argv[2];
+    std::string outputRoot = argv[3];
 
     std::vector<float> matA, matBT;
-    int m, k1, n, k2;
+    int numRowsA, numColsA, numColsB, numRowsB;
 
     if (rank == MASTER) {
-        if (!readColMajorMatrixFile(fnameA,  m, k1, matA) ||
-            !readColMajorMatrixFile(fnameBT, n, k2, matBT) ||
-            k1 != k2)
+        if (!readColMajorMatrixFile(matAFile,  numRowsA,  numColsA, matA) ||
+            !readColMajorMatrixFile(matBTFile, numColsB, numRowsB, matBT) ||
+            numColsA != numRowsB)
         {
             std::cerr << "Error reading inputs or mismatched dims" << std::endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
     }
 
-    MPI_Bcast(&m,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
-    MPI_Bcast(&k1, 1, MPI_INT, MASTER, MPI_COMM_WORLD);
-    MPI_Bcast(&n,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
-    int k = k1;
+    MPI_Bcast(&numRowsA,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(&numColsA,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(&numColsB,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(&numRowsB,  1, MPI_INT, MASTER, MPI_COMM_WORLD);
+
+    int sharedDim = numColsA;
 
     if (rank != MASTER) {
-        matA.resize(m * k);
-        matBT.resize(n * k);
+        matA.resize(numRowsA * sharedDim);
+        matBT.resize(numColsB * sharedDim);
     }
-    MPI_Bcast(matA .data(), m * k, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
-    MPI_Bcast(matBT.data(), n * k, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(matA.data(),  numRowsA * sharedDim, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
+    MPI_Bcast(matBT.data(), numColsB * sharedDim, MPI_FLOAT, MASTER, MPI_COMM_WORLD);
 
-    std::vector<float> C(m * n, 0.0f);
+    std::vector<float> matC(numRowsA * numColsB, 0.0f);
 
     double t0 = MPI_Wtime();
     sgemm('N','T',
-          m, n, k,
-          1.0f,
-          matA.data(),  m,
-          matBT.data(), n,
-          0.0f,
-          C.data(),  m,
-          rank, size);
+        numRowsA, numColsB, sharedDim,
+        1.0f,
+        matA.data(), numRowsA,
+        matBT.data(), numColsB,
+        0.0f,
+        matC.data(), numRowsA,
+        rank, size
+    );
     double t1 = MPI_Wtime();
-    double mpi_sec = t1 - t0;
+    double timeParallel = t1 - t0;
 
     if (rank == MASTER) {
-        std::string base = getOutputBase(out_root);
+        std::string base = getOutputBase(outputRoot);
 
-        double cpu_sec = 0;
-        if (!loadSequentialTiming(base, cpu_sec)) {
+        double timeSequential = 0;
+        if (!loadSequentialTiming(base, timeSequential)) {
             std::cerr << "Error: cannot load sequential timing for \"" << base << "\"" << std::endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-        std::vector<float> C_seq;
-        int rm, rn;
-        if (!loadSequentialResult(base, rm, rn, C_seq) || rm != m || rn != n) {
+        std::vector<float> matSequential;
+        int seqRows, seqCols;
+        if (!loadSequentialResult(base, seqRows, seqCols, matSequential) ||
+            seqRows != numRowsA || seqCols != numColsB)
+        {
             std::cerr << "Error: cannot load sequential result or size mismatch" << std::endl;
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-        bool ok = compareResults(C_seq, C);
+        bool ok = compareResults(matSequential, matC);
 
         std::cout << BOLD << "  Test " << (ok ? (std::string(GREEN) + "PASSED") : (std::string(RED) + "FAILED")) << CLEAR << std::endl;
-        std::cout << BOLD << "  Sequential time: " << BLUE << cpu_sec << " s " << CLEAR << std::endl;
-        std::cout << BOLD << "  Parallel time:   " << BLUE << mpi_sec << " s " << CLEAR << std::endl;
-        std::cout << BOLD << "  Speedup:         " << BLUE << (cpu_sec / mpi_sec) << "x " << CLEAR << std::endl;
+        std::cout << BOLD << "  Sequential time: " << BLUE << timeSequential << " s " << CLEAR << std::endl;
+        std::cout << BOLD << "  Parallel time:   " << BLUE << timeParallel << " s " << CLEAR << std::endl;
+        std::cout << BOLD << "  Speedup:         " << BLUE << (timeSequential / timeParallel) << "x " << CLEAR << std::endl;
         std::cout << std::endl;
 
-        writeColMajorMatrixFile(out_root, m, n, C);
-        appendTiming(out_root, mpi_sec);
+        writeColMajorMatrixFile(outputRoot, numRowsA, numColsB, matC);
+        appendTiming(outputRoot, timeParallel);
     }
 
     MPI_Finalize();
