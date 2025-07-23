@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
 #include "../include/common.hpp"
 
 void r8mat_write(char *output_filename, int m, int n, double table[]) {
@@ -86,29 +87,27 @@ void getOutputBase(const char *root, char *base, size_t len) {
     const char *name = slash ? slash+1 : root;
     strncpy(base, name, len-1);
     base[len-1] = '\0';
-    if (char *dot = strchr(base, '.')) *dot = '\0';
+   	char *dot = strchr(base, '.');
+    if (dot) *dot = '\0';
 }
 
-bool loadSequentialResult(const char *base, int n, const char *kind, std::vector<double> &vec) {
+bool loadSequentialResult(const char *base, int n, const char *kind, double *arr) {
     char filename[512];
     snprintf(filename, sizeof(filename), "output/seq/%s_%s.txt", base, kind);
     FILE *f = fopen(filename, "r");
     if (!f) return false;
 
-    vec.resize(n);
     for (int i = 0; i < n; ++i) {
-        double val;
-        if (fscanf(f, "%lf", &val) != 1) {
+        if (fscanf(f, "%lf", &arr[i]) != 1) {
             fclose(f);
             return false;
         }
-        vec[i] = static_cast<double>(val);
     }
     fclose(f);
     return true;
 }
 
-bool loadSequentialTiming(const char *base, double &cpu_sec) {
+bool loadSequentialTiming(const char *base, double *cpu_sec) {
     char seqtime[512];
     snprintf(seqtime, sizeof(seqtime), "output/seq/%s_time.txt", base);
     FILE *fs = fopen(seqtime, "r");
@@ -121,14 +120,14 @@ bool loadSequentialTiming(const char *base, double &cpu_sec) {
     }
     fclose(fs);
     if (cnt == 0) return false;
-    cpu_sec = sum / cnt;
+    *cpu_sec = sum / cnt;
     return true;
 }
 
-bool compareResults(const std::vector<double> &a, const std::vector<double> &b, double tol) {
-    if (a.size() != b.size()) return false;
-    for (size_t i = 0; i < a.size(); ++i)
-        if (fabsf(a[i] - b[i]) > tol) return false;
+bool compareResults(const double *a, const double *b, int n, double tol) {
+    for (int i = 0; i < n; ++i)
+        if (fabs(a[i] - b[i]) > tol)
+            return false;
     return true;
 }
 

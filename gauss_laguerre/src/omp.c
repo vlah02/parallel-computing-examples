@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <vector>
 #include <omp.h>
+
 #include "../include/common.hpp"
 
 double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
@@ -57,14 +57,15 @@ int main(int argc, char *argv[]) {
     char base[256];
     getOutputBase(out_prefix, base, sizeof(base));
 
-    std::vector<double> x_ref, w_ref;
-    if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
-        fprintf(stderr, "Failed to load precomputed x or w files.\n");
-        exit(EXIT_FAILURE);
-    }
+	double *x_ref = (double *)malloc(n * sizeof(double));
+	double *w_ref = (double *)malloc(n * sizeof(double));
+	if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
+    	fprintf(stderr, "Failed to load precomputed x or w files.\n");
+    	exit(EXIT_FAILURE);
+	}
 
-    double time_seq = 0.0;
-    if (!loadSequentialTiming(base, time_seq)) {
+    double seq_time = 0.0;
+    if (!loadSequentialTiming(base, &seq_time)) {
         fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         exit(EXIT_FAILURE);
     }
@@ -80,13 +81,12 @@ int main(int argc, char *argv[]) {
     double t1 = omp_get_wtime();
     double par_time = t1 - t0;
 
-    int ok = compareResults(x_ref, std::vector<double>(x_calc, x_calc + n)) &&
-         compareResults(w_ref, std::vector<double>(w_calc, w_calc + n));
+    int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
 
     printf("\n%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("  %sSequential time: %s%.6fs %s\n", BOLD, BLUE, time_seq, CLEAR);
+    printf("  %sSequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
     printf("  %sParallel time:   %s%.6fs %s\n", BOLD, BLUE, par_time, CLEAR);
-    printf("  %sSpeedup:         %s%.3fx %s\n", BOLD, BLUE, time_seq / par_time, CLEAR);
+    printf("  %sSpeedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
     rule_write(n, out_prefix, x_calc, w_calc, r);
     printf("\n");
     appendTiming(out_prefix, par_time);
@@ -94,5 +94,7 @@ int main(int argc, char *argv[]) {
     free(r);
     free(x_calc);
     free(w_calc);
+	free(x_ref);
+	free(w_ref);
     return 0;
 }

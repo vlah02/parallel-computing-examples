@@ -55,6 +55,7 @@ double *nc_compute_new(int n, double x_min, double x_max, double x[], int rank, 
     free(w);
     return w_calc;
 }
+
 int main(int argc, char *argv[]) {
     double a, b;
 	int n;
@@ -81,16 +82,17 @@ int main(int argc, char *argv[]) {
     char base[256];
     getOutputBase(out_prefix, base, sizeof(base));
 
-    std::vector<double> x_ref, w_ref;
+    double *x_ref = (double *)malloc(n * sizeof(double));
+	double *w_ref = (double *)malloc(n * sizeof(double));
     if (rank == MASTER) {
-        if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
-            fprintf(stderr, "Failed to load precomputed x or w files.\n");
-            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-        }
+		if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
+    		fprintf(stderr, "Failed to load precomputed x or w files.\n");
+    		exit(EXIT_FAILURE);
+		}
     }
 
     double seq_time = 0.0;
-    if (!loadSequentialTiming(base, seq_time)) {
+    if (!loadSequentialTiming(base, &seq_time)) {
         if (rank == MASTER) fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
@@ -110,14 +112,7 @@ int main(int argc, char *argv[]) {
         double t1 = MPI_Wtime();
         double par_time = t1 - t0;
 
-        std::vector<double> x_vec(n), w_vec(n);
-		for (int i = 0; i < n; i++) {
-    		x_vec[i] = x_calc[i];
-    		w_vec[i] = w_calc[i];
-		}
-
-		int ok = compareResults(x_ref, x_vec) &&
-			compareResults(w_ref, w_vec);
+		int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
 
         printf("\n%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
         printf("%s  Sequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
@@ -128,8 +123,11 @@ int main(int argc, char *argv[]) {
 		appendTiming(out_prefix, par_time);
     }
 
+	free(r);
     free(x_calc);
     free(w_calc);
+	free(x_ref);
+	free(w_ref);
     MPI_Finalize();
     return 0;
 }

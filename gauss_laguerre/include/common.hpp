@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <stdbool.h>
 
 #define RED     "\033[1;31m"
 #define GREEN   "\033[1;32m"
@@ -16,9 +16,9 @@ void    rule_write(int order, char *filename, double x[], double w[], double r[]
 
 void getOutputBase(const char *root, char *base, size_t len);
 
-bool loadSequentialResult(const char *base, int n, const char *kind, std::vector<double> &vec);
-bool loadSequentialTiming(const char *base, double &cpu_sec);
+bool loadSequentialResult(const char *base, int n, const char *kind, double *arr);
+bool loadSequentialTiming(const char *base, double *cpu_sec);
 
-bool compareResults(const std::vector<double> &a, const std::vector<double> &b, double tol = 0.001);
+bool compareResults(const double *a, const double *b, int n, double tol);
 
 bool appendTiming(const char *root, double time_sec);
