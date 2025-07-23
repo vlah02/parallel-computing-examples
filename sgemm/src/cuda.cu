@@ -1,7 +1,5 @@
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <vector>
+#include <string>
 #include <iostream>
 #include <cuda_runtime.h>
 #include "../include/common.hpp"
@@ -57,7 +55,7 @@ void sgemm(
     float  *C,  int ldc,
     float  *time_ms
 ) {
-	cudaEvent_t start, stop;
+    cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
@@ -74,8 +72,7 @@ void sgemm(
     dim3 block(TILE_WIDTH, TILE_WIDTH);
 
     cudaEventRecord(start, 0);
-    kernel<<<grid,block>>>(dA, lda, dBT, ldb, dC, ldc,
-                                alpha, beta, m, n, k);
+    kernel<<<grid,block>>>(dA, lda, dBT, ldb, dC, ldc, alpha, beta, m, n, k);
     cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
 
@@ -91,25 +88,25 @@ void sgemm(
 
 int main(int argc, char *argv[]) {
     if (argc != 4) {
-        fprintf(stderr, "Usage: %s A.txt BT.txt output_root\n", argv[0]);
+        std::cerr << "Usage: " << argv[0] << " A.txt BT.txt output_root" << std::endl;
         exit(EXIT_FAILURE);
     }
+
+    std::string fnameA = argv[1], fnameBT = argv[2], out_root = argv[3];
 
     std::vector<float> matA, matBT;
     int m, k1, n, k2;
 
-    if (!readColMajorMatrixFile(argv[1], m, k1, matA) ||
-		!readColMajorMatrixFile(argv[2], n, k2, matBT) ||
-		k1 != k2)
-	{
-        fprintf(stderr, "Error loading inputs or mismatched dims\n");
+    if (!readColMajorMatrixFile(fnameA, m, k1, matA) ||
+        !readColMajorMatrixFile(fnameBT, n, k2, matBT) ||
+        k1 != k2)
+    {
+        std::cerr << "Error loading inputs or mismatched dims" << std::endl;
         exit(EXIT_FAILURE);
     }
     int k = k1;
 
-    const char *root = argv[3];
-
-	std::vector<float> C_gpu(m*n, 0.0f);
+    std::vector<float> C_gpu(m*n, 0.0f);
 
     float gpu_ms = 0.0f;
     sgemm(
@@ -123,32 +120,31 @@ int main(int argc, char *argv[]) {
     );
     double gpu_sec = gpu_ms * 1e-3;
 
-    char base[256];
-    getOutputBase(root, base, sizeof(base));
+    std::string base = getOutputBase(out_root);
 
     double cpu_sec = 0;
     if (!loadSequentialTiming(base, cpu_sec)) {
-        fprintf(stderr, "Error: cannot load sequential timing for \"%s\"\n", base);
+        std::cerr << "Error: cannot load sequential timing for \"" << base << "\"" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     std::vector<float> C_seq;
     int rm, rn;
     if (!loadSequentialResult(base, rm, rn, C_seq) || rm != m || rn != n) {
-        fprintf(stderr, "Error: cannot load sequential result or size mismatch\n");
+        std::cerr << "Error: cannot load sequential result or size mismatch" << std::endl;
         exit(EXIT_FAILURE);
     }
 
     bool ok = compareResults(C_seq, C_gpu);
 
-    printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("%s  Sequential time: %s%.6f s %s\n", BOLD, BLUE, cpu_sec, CLEAR);
-    printf("%s  Parallel time:   %s%.6f s %s\n", BOLD, BLUE, gpu_sec, CLEAR);
-    printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, cpu_sec / gpu_sec, CLEAR);
-    printf("\n");
+    std::cout << BOLD << "  Test " << (ok ? (std::string(GREEN) + "PASSED") : (std::string(RED) + "FAILED")) << CLEAR << std::endl;
+    std::cout << BOLD << "  Sequential time: " << BLUE << cpu_sec << " s " << CLEAR << std::endl;
+    std::cout << BOLD << "  Parallel time:   " << BLUE << gpu_sec << " s " << CLEAR << std::endl;
+    std::cout << BOLD << "  Speedup:         " << BLUE << (cpu_sec / gpu_sec) << "x " << CLEAR << std::endl;
+    std::cout << std::endl;
 
-    writeColMajorMatrixFile(root, m, n, C_gpu);
-    appendTiming(root, gpu_sec);
+    writeColMajorMatrixFile(out_root, m, n, C_gpu);
+    appendTiming(out_root, gpu_sec);
 
     return 0;
 }
