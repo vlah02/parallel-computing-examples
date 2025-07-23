@@ -92,9 +92,7 @@ int main(int argc, char *argv[]) {
     appendTiming(out_prefix, par_time);
 
     free(r);
-    free(x_calc);
-    free(w_calc);
-	free(x_ref);
-	free(w_ref);
-    return 0;
+	free(x_ref); free(w_ref);
+	free(x_calc); free(w_calc);
+	return 0;
 }

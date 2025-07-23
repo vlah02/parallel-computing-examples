@@ -55,99 +55,62 @@ double *nc_compute_new(int n, double a, double b, double x[]) {
 }
 
 int main(int argc, char *argv[]) {
+	double a, b;
     int n;
-    double a, b;
     char out_prefix[256];
-
     if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
     if (argc >= 3) a = atof(argv[2]); else { printf("Enter A: "); scanf("%lf", &a); }
     if (argc >= 4) b = atof(argv[3]); else { printf("Enter B: "); scanf("%lf", &b); }
     if (argc >= 5) strncpy(out_prefix, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", out_prefix); }
     out_prefix[255] = '\0';
 
-    const char *basename = strrchr(out_prefix, '/');
-    basename = (basename == NULL) ? out_prefix : basename + 1;
+    char base[256];
+    getOutputBase(out_prefix, base, sizeof(base));
 
-    char xfile[300], wfile[300], tfile[300];
-    snprintf(xfile, sizeof(xfile), "output/seq/%s_x.txt", basename);
-    snprintf(wfile, sizeof(wfile), "output/seq/%s_w.txt", basename);
-    snprintf(tfile, sizeof(tfile), "output/seq/%s_time.txt", basename);
-
-    double *x = (double *)malloc(n * sizeof(double));
-    double *w = (double *)malloc(n * sizeof(double));
-
-    FILE *fx = fopen(xfile, "r");
-    FILE *fw = fopen(wfile, "r");
-    FILE *ft = fopen(tfile, "r");
-    if (!fx || !fw || !ft) {
-        fprintf(stderr, "Failed to load precomputed sequential files.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    for (int i = 0; i < n; i++) fscanf(fx, "%lf", &x[i]);
-    for (int i = 0; i < n; i++) fscanf(fw, "%lf", &w[i]);
-
-	double time_seq = 0.0;
-	int time_count = 0;
-	double tval;
-	while (fscanf(ft, "%lf", &tval) == 1) {
-    	time_seq += tval;
-    	time_count++;
-	}
-	if (time_count == 0) {
-    	fprintf(stderr, "No times found in file %s\n", tfile);
+    double *x_ref = (double *)malloc(n * sizeof(double));
+	double *w_ref = (double *)malloc(n * sizeof(double));
+	if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
+    	fprintf(stderr, "Failed to load precomputed x or w files.\n");
     	exit(EXIT_FAILURE);
 	}
-	time_seq /= time_count;
 
-    fclose(fx); fclose(fw); fclose(ft);
-
-    double *xx = ccn_compute_points_new(n);
-    double *ww_warmup = nc_compute_new(n, a, b, xx);
-    cudaFreeHost(ww_warmup);
-
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start); cudaEventCreate(&stop);
-    cudaEventRecord(start);
-    double *ww = nc_compute_new(n, a, b, xx);
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
-
-    float time_par;
-    cudaEventElapsedTime(&time_par, start, stop);
-	time_par /= 1000.0;
-
-    for (int i = 0; i < n; i++)
-        xx[i] = ((a + b) + (b - a) * xx[i]) * 0.5;
+    double seq_time = 0.0;
+    if (!loadSequentialTiming(base, &seq_time)) {
+        fprintf(stderr, "No times found in sequential timing file for %s\n", base);
+        exit(EXIT_FAILURE);
+    }
 
 	double *r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
-    int ok = 1;
-    for (int i = 0; i < n; i++) {
-        if (fabs(ww[i] - w[i]) > 1e-6 || fabs(xx[i] - x[i]) > 1e-12) {
-            ok = 0;
-            break;
-        }
-    }
+    double *x_calc = ccn_compute_points_new(n);
+    double *w_warmup = nc_compute_new(n, a, b, x_calc);
+    cudaFreeHost(w_warmup);
+    cudaEvent_t start, stop; cudaEventCreate(&start); cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    double *w_calc = nc_compute_new(n, a, b, x_calc);
+    cudaEventRecord(stop); cudaEventSynchronize(stop);
+
+    float par_time;
+    cudaEventElapsedTime(&par_time, start, stop);
+	par_time /= 1000.0;
+
+    for (int i = 0; i < n; i++)
+        x_calc[i] = ((a + b) + (b - a) * x_calc[i]) * 0.5;
+
+    int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
 
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
-    printf("%s  Sequential time: %s%.3fs %s\n", BOLD, BLUE, time_seq, CLEAR);
-    printf("%s  Parallel time:   %s%.3fs %s\n", BOLD, BLUE, time_par, CLEAR);
-    printf("%s  Speedup:         %s%.2fx %s\n", BOLD, BLUE, time_seq / time_par, CLEAR);
-    rule_write(n, out_prefix, xx, ww, r);
+    printf("%s  Sequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
+    printf("%s  Parallel time:   %s%.6fs %s\n", BOLD, BLUE, par_time, CLEAR);
+    printf("%s  Speedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
+    rule_write(n, out_prefix, x_calc, w_calc, r);
 	printf("\n");
+	appendTiming(out_prefix, par_time);
 
-    char time_out[300];
-    snprintf(time_out, sizeof(time_out), "%s_time.txt", out_prefix);
-    FILE *fout = fopen(time_out, "a");
-    if (fout) {
-        fprintf(fout, "%.6f\n", time_par);
-        fclose(fout);
-    } else {
-        perror("fopen for CUDA time");
-    }
-
-    free(r); free(x); free(w); free(xx); cudaFreeHost(ww);
+    free(r);
+	free(x_ref); free(w_ref);
+	free(x_calc); cudaFreeHost(w_calc);
     cudaEventDestroy(start); cudaEventDestroy(stop);
     return 0;
 }

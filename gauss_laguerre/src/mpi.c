@@ -124,10 +124,8 @@ int main(int argc, char *argv[]) {
     }
 
 	free(r);
-    free(x_calc);
-    free(w_calc);
-	free(x_ref);
-	free(w_ref);
+	free(x_ref); free(w_ref);
+	free(x_calc); free(w_calc);
     MPI_Finalize();
     return 0;
 }
