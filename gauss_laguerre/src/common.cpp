@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "../include/common.hpp"
 
 void r8mat_write(char *output_filename, int m, int n, double table[]) {
     FILE *output = fopen(output_filename, "wt");
@@ -78,4 +79,68 @@ double *ccn_compute_points_new(int n) {
     if (n >= 3) x[2] = +1.0;
 
     return x;
+}
+
+void getOutputBase(const char *root, char *base, size_t len) {
+    const char *slash = strrchr(root, '/');
+    const char *name = slash ? slash+1 : root;
+    strncpy(base, name, len-1);
+    base[len-1] = '\0';
+    if (char *dot = strchr(base, '.')) *dot = '\0';
+}
+
+bool loadSequentialResult(const char *base, int n, const char *kind, std::vector<double> &vec) {
+    char filename[512];
+    snprintf(filename, sizeof(filename), "output/seq/%s_%s.txt", base, kind);
+    FILE *f = fopen(filename, "r");
+    if (!f) return false;
+
+    vec.resize(n);
+    for (int i = 0; i < n; ++i) {
+        double val;
+        if (fscanf(f, "%lf", &val) != 1) {
+            fclose(f);
+            return false;
+        }
+        vec[i] = static_cast<double>(val);
+    }
+    fclose(f);
+    return true;
+}
+
+bool loadSequentialTiming(const char *base, double &cpu_sec) {
+    char seqtime[512];
+    snprintf(seqtime, sizeof(seqtime), "output/seq/%s_time.txt", base);
+    FILE *fs = fopen(seqtime, "r");
+    if (!fs) return false;
+    double sum = 0, tv;
+    int cnt = 0;
+    while (fscanf(fs, "%lf", &tv) == 1) {
+        sum += tv;
+        cnt++;
+    }
+    fclose(fs);
+    if (cnt == 0) return false;
+    cpu_sec = sum / cnt;
+    return true;
+}
+
+bool compareResults(const std::vector<double> &a, const std::vector<double> &b, double tol) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (fabsf(a[i] - b[i]) > tol) return false;
+    return true;
+}
+
+bool appendTiming(const char *root, double time_sec) {
+    char tf[256];
+    snprintf(tf, sizeof(tf), "%s_time.txt", root);
+    FILE *f = fopen(tf, "a");
+    if (!f) {
+        perror("fopen timefile");
+        return false;
+    }
+    fprintf(f, "%.6f\n", time_sec);
+    fclose(f);
+    return true;
 }
