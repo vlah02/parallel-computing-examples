@@ -2,7 +2,7 @@
 set -euo pipefail
 
 runs=${1:-1}
-orders=(99 999)
+orders=(99 999 2999)
 
 make clean
 make
