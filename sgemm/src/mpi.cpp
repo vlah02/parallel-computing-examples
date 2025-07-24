@@ -20,33 +20,48 @@ void sgemm(
         return;
     }
 
-    int chunk = numRowsA / size;
-    int rem   = numRowsA % size;
-    int start = chunk * rank + (rem > rank ? rank : rem);
-    int end   = start + chunk + (rem > rank ? 1 : 0);
+    int colsPerProc = numColsB / size;
+    int rem = numColsB % size;
+    int colStart = colsPerProc * rank + (rem > rank ? rank : rem);
+    int localNumCols = colsPerProc + (rem > rank ? 1 : 0);
 
-    std::vector<float> localC(numRowsA * numColsB, 0.0f);
+    std::vector<float> localC(numRowsA * localNumCols, 0.0f);
 
     constexpr int BLOCK_SIZE = 16;
-    for (int ii = start; ii < end; ii += BLOCK_SIZE) {
-        int i_max = std::min(ii + BLOCK_SIZE, end);
-        for (int jj = 0; jj < numColsB; jj += BLOCK_SIZE) {
-            int j_max = std::min(jj + BLOCK_SIZE, numColsB);
-            for (int i = ii; i < i_max; ++i) {
-                for (int j = jj; j < j_max; ++j) {
+    for (int jj = 0; jj < localNumCols; jj += BLOCK_SIZE) {
+        int j_max = std::min(jj + BLOCK_SIZE, localNumCols);
+        for (int ii = 0; ii < numRowsA; ii += BLOCK_SIZE) {
+            int i_max = std::min(ii + BLOCK_SIZE, numRowsA);
+            for (int j = jj; j < j_max; ++j) {
+                int globalJ = colStart + j;
+                for (int i = ii; i < i_max; ++i) {
                     float acc = 0.0f;
                     for (int t = 0; t < sharedDim; ++t) {
-                        acc += matA[i + t * lda] * matBT[j + t * ldb];
+                        acc += matA[i + t * lda] * matBT[globalJ + t * ldb];
                     }
-                    localC[i + j * ldc] = beta * localC[i + j * ldc] + alpha * acc;
+                    localC[i + j * numRowsA] = beta * localC[i + j * numRowsA] + alpha * acc;
                 }
             }
         }
     }
 
-    MPI_Reduce(localC.data(), matC, numRowsA * numColsB, MPI_FLOAT, MPI_SUM, MASTER, MPI_COMM_WORLD);
-}
+    std::vector<int> recvcounts(size), displs(size);
+    int ofs = 0;
+    for (int r = 0; r < size; ++r) {
+        int cpc = numColsB / size;
+        int remc = numColsB % size;
+        int lnc = cpc + (remc > r ? 1 : 0);
+        recvcounts[r] = numRowsA * lnc;
+        displs[r] = ofs;
+        ofs += recvcounts[r];
+    }
 
+    MPI_Gatherv(
+        localC.data(), numRowsA * localNumCols, MPI_FLOAT,
+        matC, recvcounts.data(), displs.data(), MPI_FLOAT,
+        MASTER, MPI_COMM_WORLD
+    );
+}
 
 int main(int argc, char* argv[]) {
     MPI_Init(&argc, &argv);
