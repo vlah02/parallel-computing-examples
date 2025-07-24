@@ -14,8 +14,7 @@ void sgemm(
     int rank, int size
 ) {
     if ((transA != 'N' && transA != 'n') ||
-        (transB != 'T' && transB != 't'))
-    {
+        (transB != 'T' && transB != 't')) {
         if (rank == MASTER)
             std::cerr << "sgemm: unsupported transpose option" << std::endl;
         return;
@@ -28,19 +27,26 @@ void sgemm(
 
     std::vector<float> localC(numRowsA * numColsB, 0.0f);
 
-    for (int i = start; i < end; ++i) {
-        for (int j = 0; j < numColsB; ++j) {
-            float acc = 0.0f;
-            for (int t = 0; t < sharedDim; ++t) {
-                acc += matA[i + t*lda] * matBT[j + t*ldb];
+    constexpr int BLOCK_SIZE = 16;
+    for (int ii = start; ii < end; ii += BLOCK_SIZE) {
+        int i_max = std::min(ii + BLOCK_SIZE, end);
+        for (int jj = 0; jj < numColsB; jj += BLOCK_SIZE) {
+            int j_max = std::min(jj + BLOCK_SIZE, numColsB);
+            for (int i = ii; i < i_max; ++i) {
+                for (int j = jj; j < j_max; ++j) {
+                    float acc = 0.0f;
+                    for (int t = 0; t < sharedDim; ++t) {
+                        acc += matA[i + t * lda] * matBT[j + t * ldb];
+                    }
+                    localC[i + j * ldc] = beta * localC[i + j * ldc] + alpha * acc;
+                }
             }
-            localC[i + j*ldc] = beta * localC[i + j*ldc]
-                              + alpha * acc;
         }
     }
 
     MPI_Reduce(localC.data(), matC, numRowsA * numColsB, MPI_FLOAT, MPI_SUM, MASTER, MPI_COMM_WORLD);
 }
+
 
 int main(int argc, char* argv[]) {
     MPI_Init(&argc, &argv);

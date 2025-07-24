@@ -34,7 +34,7 @@ done
 
 for size in "${sizes[@]}"; do
   echo "==> Running MPI on ${size}"
-  mpirun -np 8 ./bin/mpi \
+  mpirun -np 8 mpiP ./bin/mpi \
     data/${size}/input/matrix1.txt \
     data/${size}/input/matrix2t.txt \
     output/mpi/result_${size}.txt
