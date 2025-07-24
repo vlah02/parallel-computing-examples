@@ -26,6 +26,7 @@ done
 
 for size in "${sizes[@]}"; do
   echo "==> Running OpenMP on ${size}"
+  export OMP_NUM_THREADS=8
   ./bin/omp \
     data/${size}/input/matrix1.txt \
     data/${size}/input/matrix2t.txt \
