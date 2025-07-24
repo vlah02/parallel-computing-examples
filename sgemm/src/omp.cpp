@@ -16,22 +16,20 @@ void sgemm(
         std::cerr << "sgemm: unsupported transpose options\n";
         return;
     }
-    int numThreads = omp_get_max_threads();
-#pragma omp parallel
-    {
-        int tid = omp_get_thread_num();
-        int chunk = numRowsA / numThreads;
-        int rem   = numRowsA % numThreads;
-        int start = chunk * tid + (rem > tid ? tid : rem);
-        int end   = start + chunk + (rem > tid ? 1 : 0);
 
-        for (int i = start; i < end; ++i) {
-            for (int j = 0; j < numColsB; ++j) {
-                float acc = 0.0f;
-                for (int t = 0; t < sharedDim; ++t) {
-                    acc += matA[i + t*lda] * matBT[j + t*ldb];
+    constexpr int BLOCK = 16;
+    #pragma omp parallel for collapse(2) schedule(static)
+    for (int ii = 0; ii < numRowsA; ii += BLOCK) {
+        for (int jj = 0; jj < numColsB; jj += BLOCK) {
+            for (int i = ii; i < std::min(ii + BLOCK, numRowsA); ++i) {
+                for (int j = jj; j < std::min(jj + BLOCK, numColsB); ++j) {
+                    float acc = 0.0f;
+                    #pragma omp simd reduction(+:acc)
+                    for (int t = 0; t < sharedDim; ++t) {
+                        acc += matA[i + t * lda] * matBT[j + t * ldb];
+                    }
+                    matC[i + j * ldc] = beta * matC[i + j * ldc] + alpha * acc;
                 }
-                matC[i + j*ldc] = beta * matC[i + j*ldc] + alpha * acc;
             }
         }
     }
