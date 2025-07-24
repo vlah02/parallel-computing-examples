@@ -2,46 +2,67 @@
 #include <cuda_runtime.h>
 #include <nvToolsExt.h>
 
-#define TILE_WIDTH 32
+#define TILE_WIDTH 16
+#define BLOCK_WIDTH 8
 
 __global__ void kernel(
-    const float* matA, int lda,
-    const float* matBT, int ldb,
+    const float* __restrict__ matA, int lda,
+    const float* __restrict__ matBT, int ldb,
           float* matC,  int ldc,
     float alpha, float beta,
     int numRowsA, int numColsB, int sharedDim
 ) {
-    __shared__ float sharedA[TILE_WIDTH][TILE_WIDTH];
-    __shared__ float sharedB[TILE_WIDTH][TILE_WIDTH];
+    __shared__ float sharedA[TILE_WIDTH][TILE_WIDTH + 1];
+    __shared__ float sharedB[TILE_WIDTH][TILE_WIDTH + 1];
 
-    int by = blockIdx.y, bx = blockIdx.x;
-    int ty = threadIdx.y, tx = threadIdx.x;
-    int row = by * TILE_WIDTH + ty;
-    int col = bx * TILE_WIDTH + tx;
-    float acc = 0.0f;
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
 
-    int numTiles = (sharedDim + TILE_WIDTH - 1) / TILE_WIDTH;
-    for (int t = 0; t < numTiles; ++t) {
-        int aCol = t * TILE_WIDTH + tx;
-        sharedA[ty][tx] = (row < numRowsA && aCol < sharedDim)
-            ? matA[row + aCol * lda]
-            : 0.0f;
+    int row = blockIdx.y * TILE_WIDTH + ty * 2;
+    int col = blockIdx.x * TILE_WIDTH + tx * 2;
 
-        int bRow = t * TILE_WIDTH + ty;
-        sharedB[ty][tx] = (col < numColsB && bRow < sharedDim)
-            ? matBT[col + bRow * ldb]
-            : 0.0f;
+    float acc[2][2] = {{0.0f, 0.0f}, {0.0f, 0.0f}};
 
+    for (int t = 0; t < (sharedDim + TILE_WIDTH - 1) / TILE_WIDTH; ++t) {
+        for (int i = 0; i < 2; ++i) {
+            int globalRowA = row + i;
+            int globalColA = t * TILE_WIDTH + tx * 2;
+            for (int j = 0; j < 2; ++j) {
+                int tileCol = tx * 2 + j;
+                int globalColA2 = t * TILE_WIDTH + tileCol;
+                sharedA[ty * 2 + i][tileCol] =
+                    (globalRowA < numRowsA && globalColA2 < sharedDim) ?
+                        matA[globalRowA + globalColA2 * lda] : 0.0f;
+            }
+        }
+        for (int i = 0; i < 2; ++i) {
+            int globalRowB = t * TILE_WIDTH + ty * 2 + i;
+            int globalColB = col;
+            for (int j = 0; j < 2; ++j) {
+                int tileCol = tx * 2 + j;
+                int globalColB2 = col + j;
+                sharedB[ty * 2 + i][tileCol] =
+                    (globalColB2 < numColsB && globalRowB < sharedDim) ?
+                        matBT[globalColB2 + globalRowB * ldb] : 0.0f;
+            }
+        }
         __syncthreads();
-        for (int j = 0; j < TILE_WIDTH; ++j) {
-            acc += sharedA[ty][j] * sharedB[j][tx];
+
+        for (int k = 0; k < TILE_WIDTH; ++k) {
+            #pragma unroll
+            for (int i = 0; i < 2; ++i)
+                #pragma unroll
+                for (int j = 0; j < 2; ++j)
+                    acc[i][j] += sharedA[ty * 2 + i][k] * sharedB[k][tx * 2 + j];
         }
         __syncthreads();
     }
 
-    if (row < numRowsA && col < numColsB) {
-        matC[row + col * ldc] = beta * matC[row + col * ldc] + alpha * acc;
-    }
+    for (int i = 0; i < 2; ++i)
+        for (int j = 0; j < 2; ++j)
+            if (row + i < numRowsA && col + j < numColsB)
+                matC[(row + i) + (col + j) * ldc] =
+                    beta * matC[(row + i) + (col + j) * ldc] + alpha * acc[i][j];
 }
 
 void sgemm(
@@ -53,10 +74,6 @@ void sgemm(
     float* matC, int ldc,
     float* timeMs
 ) {
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-
     nvtxRangePushA("CUDA malloc");
     float* dA;
     float* dBT;
@@ -71,9 +88,12 @@ void sgemm(
     cudaMemcpy(dBT, matBT, numColsB * sharedDim * sizeof(float), cudaMemcpyHostToDevice);
     nvtxRangePop();
 
-    dim3 grid((numColsB + TILE_WIDTH - 1) / TILE_WIDTH,
-              (numRowsA + TILE_WIDTH - 1) / TILE_WIDTH);
-    dim3 block(TILE_WIDTH, TILE_WIDTH);
+    dim3 block(BLOCK_WIDTH, BLOCK_WIDTH);
+    dim3 grid((numColsB + TILE_WIDTH - 1) / TILE_WIDTH, (numRowsA + TILE_WIDTH - 1) / TILE_WIDTH);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
 
     cudaEventRecord(start, 0);
     nvtxRangePushA("SGEMM kernel launch");
@@ -86,18 +106,19 @@ void sgemm(
     nvtxRangePop();
     cudaEventRecord(stop, 0);
 
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(timeMs, start, stop);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
     nvtxRangePushA("Device to Host copy");
     cudaMemcpy(matC, dC, numRowsA * numColsB * sizeof(float), cudaMemcpyDeviceToHost);
     nvtxRangePop();
 
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(timeMs, start, stop);
-
     cudaFree(dA);
     cudaFree(dBT);
     cudaFree(dC);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
 }
 
 int main(int argc, char* argv[]) {
