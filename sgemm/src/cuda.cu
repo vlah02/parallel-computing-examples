@@ -2,8 +2,8 @@
 #include <cuda_runtime.h>
 #include <nvToolsExt.h>
 
-#define TILE_WIDTH 16
-#define BLOCK_WIDTH 8
+#define TILE_WIDTH 32
+#define BLOCK_WIDTH 16
 
 __global__ void kernel(
     const float* __restrict__ matA, int lda,
