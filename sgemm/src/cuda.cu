@@ -1,5 +1,6 @@
 #include "../include/common.hpp"
 #include <cuda_runtime.h>
+#include <nvToolsExt.h>
 
 #define TILE_WIDTH 32
 
@@ -56,30 +57,40 @@ void sgemm(
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
+    nvtxRangePushA("CUDA malloc");
     float* dA;
     float* dBT;
     float* dC;
     cudaMalloc(&dA,  numRowsA * sharedDim * sizeof(float));
     cudaMalloc(&dBT, numColsB * sharedDim * sizeof(float));
     cudaMalloc(&dC,  numRowsA * numColsB * sizeof(float));
+    nvtxRangePop();
 
+    nvtxRangePushA("Host to Device copy");
     cudaMemcpy(dA,  matA,  numRowsA * sharedDim * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(dBT, matBT, numColsB * sharedDim * sizeof(float), cudaMemcpyHostToDevice);
+    nvtxRangePop();
 
     dim3 grid((numColsB + TILE_WIDTH - 1) / TILE_WIDTH,
               (numRowsA + TILE_WIDTH - 1) / TILE_WIDTH);
     dim3 block(TILE_WIDTH, TILE_WIDTH);
 
     cudaEventRecord(start, 0);
+    nvtxRangePushA("SGEMM kernel launch");
     kernel<<<grid, block>>>(
         dA, numRowsA, dBT, numColsB, dC, numRowsA,
         alpha, beta,
         numRowsA, numColsB, sharedDim
     );
+    cudaDeviceSynchronize();
+    nvtxRangePop();
     cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
 
+    nvtxRangePushA("Device to Host copy");
     cudaMemcpy(matC, dC, numRowsA * numColsB * sizeof(float), cudaMemcpyDeviceToHost);
+    nvtxRangePop();
+
+    cudaEventSynchronize(stop);
     cudaEventElapsedTime(timeMs, start, stop);
 
     cudaFree(dA);
@@ -114,6 +125,7 @@ int main(int argc, char* argv[]) {
     std::vector<float> matC(numRowsA * numColsB, 0.0f);
 
     float timeMs = 0.0f;
+    nvtxRangePushA("Total SGEMM");
     sgemm(
         numRowsA, numColsB, sharedDim,
         1.0f,
@@ -123,6 +135,7 @@ int main(int argc, char* argv[]) {
         matC.data(), numRowsA,
         &timeMs
     );
+    nvtxRangePop();
     double timeParallel = timeMs * 1e-3;
 
     std::string base = getOutputBase(outputRoot);
