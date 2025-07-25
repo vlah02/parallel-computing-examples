@@ -39,6 +39,108 @@ double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
     return w;
 }
 
+double *nc_compute_new_parallel(int n, double x_min, double x_max, double x[]) {
+    double *d;
+    int i;
+    int j;
+    int k;
+    double *w;
+    double yvala;
+    double yvalb;
+
+    w = (double *)malloc(n * sizeof(double));
+
+#pragma omp parallel private(j, k, yvala, yvalb, d)
+    {
+        d = (double *)malloc(n * sizeof(double));
+
+#pragma omp for schedule(guided)
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < n; j++) {
+                d[j] = 0.0;
+            }
+            d[i] = 1.0;
+
+            for (j = 2; j <= n; j++) {
+                for (k = j; k <= n; k++) {
+                    d[n + j - k - 1] = (d[n + j - k - 1 - 1] - d[n + j - k - 1]) /
+                                       (x[n + 1 - k - 1] - x[n + j - k - 1]);
+                }
+            }
+
+            for (j = 1; j <= n - 1; j++) {
+                for (k = 1; k <= n - j; k++) {
+                    d[n - k - 1] = d[n - k - 1] - x[n - k - j] * d[n - k];
+                }
+            }
+
+            yvala = d[n - 1] / (double)(n);
+            for (j = n - 2; 0 <= j; j--) {
+                yvala = yvala * x_min + d[j] / (double)(j + 1);
+            }
+            yvala = yvala * x_min;
+
+            yvalb = d[n - 1] / (double)(n);
+            for (j = n - 2; 0 <= j; j--) {
+                yvalb = yvalb * x_max + d[j] / (double)(j + 1);
+            }
+            yvalb = yvalb * x_max;
+
+            w[i] = yvalb - yvala;
+        }
+
+        free(d);
+    }
+
+    return w;
+}
+
+double *nc_compute_new_tasks(int n, double x_min, double x_max, double x[]) {
+    double *d;
+    double *w = (double *)malloc(n * sizeof(double));
+    int j, k;
+    double yvala, yvalb;
+
+#pragma omp parallel private(j, k, yvala, yvalb, d)
+    {
+        d = (double *)malloc(n * sizeof(double));
+#pragma omp for
+        for (int i = 0; i < n; i++) {
+#pragma omp task shared(d, w)
+            {
+                for (int j = 0; j < n; j++) d[j] = 0.0;
+                d[i] = 1.0;
+
+                for (int j = 2; j <= n; j++) {
+                    for (int k = j; k <= n; k++)
+                        d[n + j - k - 1] = (d[n + j - k - 1 - 1] - d[n + j - k - 1]) /
+                                           (x[n + 1 - k - 1] - x[n + j - k - 1]);
+                }
+
+                for (int j = 1; j <= n - 1; j++) {
+                    for (int k = 1; k <= n - j; k++)
+                        d[n - k - 1] = d[n - k - 1] - x[n - k - j] * d[n - k];
+                }
+
+                double yvala = d[n - 1] / (double)(n);
+                for (int j = n - 2; 0 <= j; j--)
+                    yvala = yvala * x_min + d[j] / (double)(j + 1);
+                yvala = yvala * x_min;
+
+                double yvalb = d[n - 1] / (double)(n);
+                for (int j = n - 2; 0 <= j; j--)
+                    yvalb = yvalb * x_max + d[j] / (double)(j + 1);
+                yvalb = yvalb * x_max;
+
+                w[i] = yvalb - yvala;
+            }
+        }
+#pragma omp taskwait
+        free(d);
+    }
+    return w;
+}
+
 int main(int argc, char *argv[]) {
     double a, b;
     int n;
