@@ -1,10 +1,9 @@
 #include "../include/common.h"
 
-void r8mat_write(char *output_filename, int m, int n, double table[]) {
+void r8mat_write(const char *output_filename, int m, int n, const double *table) {
     FILE *output = fopen(output_filename, "wt");
     if (!output) {
-        fprintf(stderr, "R8MAT_WRITE - Fatal error: could not open \"%s\".\n",
-                output_filename);
+        fprintf(stderr, "r8mat_write - Fatal error: could not open \"%s\".\n", output_filename);
         exit(1);
     }
     for (int j = 0; j < n; j++) {
@@ -25,21 +24,19 @@ void rescale(double a, double b, int n, double x[], double w[]) {
     }
 }
 
-void rule_write(int order, char *filename, double x[], double w[], double r[]) {
+void rule_write(int order, const char *filename, const double *x, const double *w, const double *r) {
     char fn_r[80], fn_w[80], fn_x[80];
     strcpy(fn_r, filename); strcat(fn_r, "_r.txt");
     strcpy(fn_w, filename); strcat(fn_w, "_w.txt");
     strcpy(fn_x, filename); strcat(fn_x, "_x.txt");
-
-//    printf("  Creating files \"%s\", \"%s\", \"%s\"\n", fn_w, fn_x, fn_r);
 
     r8mat_write(fn_w, 1, order, w);
     r8mat_write(fn_x, 1, order, x);
     r8mat_write(fn_r, 1, 2, r);
 }
 
-int i4_min(int i1, int i2) {
-    return (i1 < i2 ? i1 : i2);
+int i4_min(int a, int b) {
+    return (a < b ? a : b);
 }
 
 double *ccn_compute_points_new(int n) {
@@ -53,8 +50,8 @@ double *ccn_compute_points_new(int n) {
 
     int m = 3, d = 2;
     while (m < n) {
-        int tu = d+1, td = d-1;
-        int k = i4_min(d, n-m);
+        int tu = d + 1, td = d - 1;
+        int k = i4_min(d, n - m);
 
         for (int i = 1; i <= k; i++) {
             x[m + i - 1] = (i % 2
@@ -77,16 +74,16 @@ double *ccn_compute_points_new(int n) {
     return x;
 }
 
-void getOutputBase(const char *root, char *base, size_t len) {
+void get_output_base(const char *root, char *base, size_t len) {
     const char *slash = strrchr(root, '/');
-    const char *name = slash ? slash+1 : root;
-    strncpy(base, name, len-1);
-    base[len-1] = '\0';
-   	char *dot = strchr(base, '.');
+    const char *name = slash ? slash + 1 : root;
+    strncpy(base, name, len - 1);
+    base[len - 1] = '\0';
+    char *dot = strchr(base, '.');
     if (dot) *dot = '\0';
 }
 
-bool loadSequentialResult(const char *base, int n, const char *kind, double *arr) {
+bool load_sequential_result(const char *base, int n, const char *kind, double *arr) {
     char filename[512];
     snprintf(filename, sizeof(filename), "output/seq/%s_%s.txt", base, kind);
     FILE *f = fopen(filename, "r");
@@ -102,7 +99,7 @@ bool loadSequentialResult(const char *base, int n, const char *kind, double *arr
     return true;
 }
 
-bool loadSequentialTiming(const char *base, double *cpu_sec) {
+bool load_sequential_timing(const char *base, double *cpu_sec) {
     char seqtime[512];
     snprintf(seqtime, sizeof(seqtime), "output/seq/%s_time.txt", base);
     FILE *fs = fopen(seqtime, "r");
@@ -119,14 +116,14 @@ bool loadSequentialTiming(const char *base, double *cpu_sec) {
     return true;
 }
 
-bool compareResults(const double *a, const double *b, int n, double tol) {
+bool compare_results(const double *a, const double *b, int n, double tol) {
     for (int i = 0; i < n; ++i)
         if (fabs(a[i] - b[i]) > tol)
             return false;
     return true;
 }
 
-bool appendTiming(const char *root, double time_sec) {
+bool append_timing(const char *root, double time_sec) {
     char tf[256];
     snprintf(tf, sizeof(tf), "%s_time.txt", root);
     FILE *f = fopen(tf, "a");

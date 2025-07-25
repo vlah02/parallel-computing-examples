@@ -16,20 +16,20 @@
 extern "C" {
 #endif
 
-double *ccn_compute_points_new(int n);
-int     i4_min(int i1, int i2);
-void    rescale(double a, double b, int n, double x[], double w[]);
-void    r8mat_write(char *output_filename, int m, int n, double table[]);
-void    rule_write(int order, char *filename, double x[], double w[], double r[]);
+    double *ccn_compute_points_new(int n);
+    int     i4_min(int a, int b);
+    void    rescale(double a, double b, int n, double x[], double w[]);
+    void    r8mat_write(const char *output_filename, int m, int n, const double *table);
+    void    rule_write(int order, const char *filename, const double *x, const double *w, const double *r);
 
-void getOutputBase(const char *root, char *base, size_t len);
+    void    get_output_base(const char *root, char *base, size_t len);
 
-bool loadSequentialResult(const char *base, int n, const char *kind, double *arr);
-bool loadSequentialTiming(const char *base, double *cpu_sec);
+    bool    load_sequential_result(const char *base, int n, const char *kind, double *arr);
+    bool    load_sequential_timing(const char *base, double *cpu_sec);
 
-bool compareResults(const double *a, const double *b, int n, double tol);
+    bool    compare_results(const double *a, const double *b, int n, double tol);
 
-bool appendTiming(const char *root, double time_sec);
+    bool    append_timing(const char *root, double time_sec);
 
 #ifdef __cplusplus
 }

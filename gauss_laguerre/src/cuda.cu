@@ -61,13 +61,13 @@ __global__ void extract_and_linearscale(cufftDoubleComplex *Y, double *w, int n,
 }
 
 double *nc_compute_new_fft(int n, double a, double b, double x[]) {
-    int Nfft = 2 * n;
+    int nfft = 2 * n;
     double *d_y;
     cufftDoubleComplex *d_Y;
     double *h_w;
 
     cudaMallocHost(&h_w, n * sizeof(double));
-    cudaMalloc(&d_y, Nfft * sizeof(double));
+    cudaMalloc(&d_y, nfft * sizeof(double));
     cudaMalloc(&d_Y, (n + 1) * sizeof(cufftDoubleComplex));
 
     double *h_y = (double *)malloc((n + 1) * sizeof(double));
@@ -81,7 +81,7 @@ double *nc_compute_new_fft(int n, double a, double b, double x[]) {
     free(h_y);
 
     cufftHandle plan;
-    cufftPlan1d(&plan, Nfft, CUFFT_D2Z, 1);
+    cufftPlan1d(&plan, nfft, CUFFT_D2Z, 1);
     cufftExecD2Z(plan, d_y, d_Y);
 
     int threads = 256;
@@ -107,17 +107,17 @@ int main(int argc, char *argv[]) {
     out_prefix[255] = '\0';
 
     char base[256];
-    getOutputBase(out_prefix, base, sizeof(base));
+    get_output_base(out_prefix, base, sizeof(base));
 
     double *x_ref = (double *)malloc(n * sizeof(double));
     double *w_ref = (double *)malloc(n * sizeof(double));
-    if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
+    if (!load_sequential_result(base, n, "x", x_ref) || !load_sequential_result(base, n, "w", w_ref)) {
         fprintf(stderr, "Failed to load precomputed x or w files.\n");
         exit(EXIT_FAILURE);
     }
 
     double seq_time = 0.0;
-    if (!loadSequentialTiming(base, &seq_time)) {
+    if (!load_sequential_timing(base, &seq_time)) {
         fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         exit(EXIT_FAILURE);
     }
@@ -132,7 +132,6 @@ int main(int argc, char *argv[]) {
     cudaEventRecord(start);
     double *w_calc = nc_compute_new(n, a, b, x_calc);
     cudaEventRecord(stop); cudaEventSynchronize(stop);
-
     float par_time;
     cudaEventElapsedTime(&par_time, start, stop);
     par_time /= 1000.0;
@@ -140,7 +139,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < n; i++)
         x_calc[i] = ((a + b) + (b - a) * x_calc[i]) * 0.5;
 
-    int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
+    int ok = compare_results(x_ref, x_calc, n, 1e-6) && compare_results(w_ref, w_calc, n, 1e-6);
 
     printf("\n");
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
@@ -149,7 +148,7 @@ int main(int argc, char *argv[]) {
     printf("%s  Speedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
     printf("\n");
     rule_write(n, out_prefix, x_calc, w_calc, r);
-    appendTiming(out_prefix, par_time);
+    append_timing(out_prefix, par_time);
 
     free(r);
     free(x_ref); free(w_ref);

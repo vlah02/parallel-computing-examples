@@ -8,13 +8,13 @@ double* nc_compute_new_fft(int n, double x_min, double x_max, double x[]) {
     double* d = (double*)fftw_malloc(sizeof(double) * n);
 
     for (int k = 0; k < n; ++k) c[k] = 1.0;
-    c[0] = c[n-1] = 0.5;
+    c[0] = c[n - 1] = 0.5;
 
     fftw_plan p = fftw_plan_r2r_1d(n, c, d, FFTW_REDFT00, FFTW_ESTIMATE);
     fftw_execute(p);
     fftw_destroy_plan(p);
 
-    double scale = 2.0 / (n-1) * ((x_max - x_min) / 2.0);
+    double scale = 2.0 / (n - 1) * ((x_max - x_min) / 2.0);
 
 #pragma omp parallel for
     for (int k = 0; k < n; ++k)
@@ -74,17 +74,17 @@ int main(int argc, char *argv[]) {
     out_prefix[255] = '\0';
 
     char base[256];
-    getOutputBase(out_prefix, base, sizeof(base));
+    get_output_base(out_prefix, base, sizeof(base));
 
-	double *x_ref = (double *)malloc(n * sizeof(double));
-	double *w_ref = (double *)malloc(n * sizeof(double));
-	if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
-    	fprintf(stderr, "Failed to load precomputed x or w files.\n");
-    	exit(EXIT_FAILURE);
-	}
+    double *x_ref = (double *)malloc(n * sizeof(double));
+    double *w_ref = (double *)malloc(n * sizeof(double));
+    if (!load_sequential_result(base, n, "x", x_ref) || !load_sequential_result(base, n, "w", w_ref)) {
+        fprintf(stderr, "Failed to load precomputed x or w files.\n");
+        exit(EXIT_FAILURE);
+    }
 
     double seq_time = 0.0;
-    if (!loadSequentialTiming(base, &seq_time)) {
+    if (!load_sequential_timing(base, &seq_time)) {
         fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         exit(EXIT_FAILURE);
     }
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     double t1 = omp_get_wtime();
     double par_time = t1 - t0;
 
-    int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
+    int ok = compare_results(x_ref, x_calc, n, 1e-6) && compare_results(w_ref, w_calc, n, 1e-6);
 
     printf("\n");
     printf("  %sTest %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
@@ -109,10 +109,10 @@ int main(int argc, char *argv[]) {
     printf("  %sSpeedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
     printf("\n");
     rule_write(n, out_prefix, x_calc, w_calc, r);
-    appendTiming(out_prefix, par_time);
+    append_timing(out_prefix, par_time);
 
     free(r);
-	free(x_ref); free(w_ref);
-	free(x_calc); free(w_calc);
-	return 0;
+    free(x_ref); free(w_ref);
+    free(x_calc); free(w_calc);
+    return 0;
 }

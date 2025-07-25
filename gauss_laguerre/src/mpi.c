@@ -53,53 +53,53 @@ double *nc_compute_new(int n, double x_min, double x_max, double x[], int rank, 
 }
 
 double *nc_compute_new_fft(int n, double x_min, double x_max, double x[], int rank, int size) {
-	int chunk_size = n / size;
-	int local_count = chunk_size;
-	int starting_index = rank * chunk_size;
+    int chunk_size = n / size;
+    int local_count = chunk_size;
+    int starting_index = rank * chunk_size;
 
-	double* w_local = (double*)malloc(local_count * sizeof(double));
-	double* c = (double*)fftw_malloc(sizeof(double) * n);
-	double* d = (double*)fftw_malloc(sizeof(double) * n);
+    double* w_local = (double*)malloc(local_count * sizeof(double));
+    double* c = (double*)fftw_malloc(sizeof(double) * n);
+    double* d = (double*)fftw_malloc(sizeof(double) * n);
 
-	for (int k = 0; k < n; ++k) c[k] = 1.0;
-	c[0] = c[n-1] = 0.5;
+    for (int k = 0; k < n; ++k) c[k] = 1.0;
+    c[0] = c[n-1] = 0.5;
 
-	fftw_plan p = fftw_plan_r2r_1d(n, c, d, FFTW_REDFT00, FFTW_ESTIMATE);
-	fftw_execute(p);
-	fftw_destroy_plan(p);
+    fftw_plan p = fftw_plan_r2r_1d(n, c, d, FFTW_REDFT00, FFTW_ESTIMATE);
+    fftw_execute(p);
+    fftw_destroy_plan(p);
 
-	double scale = 2.0 / (n-1) * ((x_max - x_min) / 2.0);
-	for (int i = 0; i < local_count; i++) {
-		int k = starting_index + i;
-		w_local[i] = d[k] * scale;
-	}
+    double scale = 2.0 / (n-1) * ((x_max - x_min) / 2.0);
+    for (int i = 0; i < local_count; i++) {
+        int k = starting_index + i;
+        w_local[i] = d[k] * scale;
+    }
 
-	fftw_free(c);
-	fftw_free(d);
+    fftw_free(c);
+    fftw_free(d);
 
-	double *w_calc = NULL;
-	if (rank == MASTER) w_calc = (double *)malloc(n * sizeof(double));
+    double *w_calc = NULL;
+    if (rank == MASTER) w_calc = (double *)malloc(n * sizeof(double));
 
-	MPI_Gather(w_local, local_count, MPI_DOUBLE, w_calc, local_count, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
-	free(w_local);
-	return w_calc;
+    MPI_Gather(w_local, local_count, MPI_DOUBLE, w_calc, local_count, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+    free(w_local);
+    return w_calc;
 }
 
 int main(int argc, char *argv[]) {
     double a, b;
-	int n;
-	char out_prefix[256];
-	int rank, size;
+    int n;
+    char out_prefix[256];
+    int rank, size;
 
-	MPI_Init(&argc, &argv);
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-	if (rank == MASTER) {
+    if (rank == MASTER) {
         if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
         if (argc >= 3) a = atof(argv[2]); else { printf("Enter A: "); scanf("%lf", &a); }
         if (argc >= 4) b = atof(argv[3]); else { printf("Enter B: "); scanf("%lf", &b); }
-    	if (argc >= 5) strncpy(out_prefix, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", out_prefix); }
+        if (argc >= 5) strncpy(out_prefix, argv[4], 255); else { printf("Enter root filename: "); scanf("%s", out_prefix); }
         out_prefix[255] = '\0';
     }
 
@@ -109,31 +109,32 @@ int main(int argc, char *argv[]) {
     MPI_Bcast(out_prefix, 256, MPI_CHAR, MASTER, MPI_COMM_WORLD);
 
     char base[256];
-    getOutputBase(out_prefix, base, sizeof(base));
+    get_output_base(out_prefix, base, sizeof(base));
 
     double *x_ref = (double *)malloc(n * sizeof(double));
-	double *w_ref = (double *)malloc(n * sizeof(double));
+    double *w_ref = (double *)malloc(n * sizeof(double));
     if (rank == MASTER) {
-		if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
-    		fprintf(stderr, "Failed to load precomputed x or w files.\n");
-    		exit(EXIT_FAILURE);
-		}
+        if (!load_sequential_result(base, n, "x", x_ref) || !load_sequential_result(base, n, "w", w_ref)) {
+            fprintf(stderr, "Failed to load precomputed x or w files.\n");
+            exit(EXIT_FAILURE);
+        }
     }
 
     double seq_time = 0.0;
-    if (!loadSequentialTiming(base, &seq_time)) {
+    if (!load_sequential_timing(base, &seq_time)) {
         if (rank == MASTER) fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
 
-	double *r = (double *)malloc(2 * sizeof(double));
+    double *r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
-	double t0 = MPI_Wtime();
-	double* x_calc;
+    double t0 = MPI_Wtime();
+    double* x_calc;
     if (rank == MASTER) x_calc = ccn_compute_points_new(n);
     else x_calc = (double *)malloc(n * sizeof(double));
     MPI_Bcast(x_calc, n, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+
     double* w_calc = nc_compute_new(n, -1.0, +1.0, x_calc, rank, size);
 
     if (rank == MASTER) {
@@ -141,21 +142,21 @@ int main(int argc, char *argv[]) {
         double t1 = MPI_Wtime();
         double par_time = t1 - t0;
 
-		int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
+        int ok = compare_results(x_ref, x_calc, n, 1e-6) && compare_results(w_ref, w_calc, n, 1e-6);
 
-		printf("\n");
+        printf("\n");
         printf("  %sTest %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
         printf("  %sSequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
         printf("  %sParallel time:   %s%.6fs %s\n", BOLD, BLUE, par_time, CLEAR);
         printf("  %sSpeedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
-		printf("\n");
+        printf("\n");
         rule_write(n, out_prefix, x_calc, w_calc, r);
-		appendTiming(out_prefix, par_time);
+        append_timing(out_prefix, par_time);
     }
 
-	free(r);
-	free(x_ref); free(w_ref);
-	free(x_calc); free(w_calc);
+    free(r);
+    free(x_ref); free(w_ref);
+    free(x_calc); free(w_calc);
     MPI_Finalize();
     return 0;
 }

@@ -13,19 +13,19 @@ double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
         for (int j = 2; j <= n; j++) {
             for (int k = j; k <= n; k++) {
                 int idx = n + j - k - 1;
-                d[idx] = (d[idx-1] - d[idx]) / (x[n+1-k-1] - x[idx]);
+                d[idx] = (d[idx - 1] - d[idx]) / (x[n + 1 - k - 1] - x[idx]);
             }
         }
-        for (int j = 1; j <= n-1; j++) {
-            for (int k = 1; k <= n-j; k++) {
-                d[n-k-1] -= x[n-k-j] * d[n-k];
+        for (int j = 1; j <= n - 1; j++) {
+            for (int k = 1; k <= n - j; k++) {
+                d[n - k - 1] -= x[n - k - j] * d[n - k];
             }
         }
 
-        double yvala = d[n-1]/n, yvalb = yvala;
-        for (int j = n-2; j >= 0; j--) {
-            yvala = yvala * x_min + d[j]/(j+1);
-            yvalb = yvalb * x_max + d[j]/(j+1);
+        double yvala = d[n - 1] / n, yvalb = yvala;
+        for (int j = n - 2; j >= 0; j--) {
+            yvala = yvala * x_min + d[j] / (j + 1);
+            yvalb = yvalb * x_max + d[j] / (j + 1);
         }
         w[i] = yvalb * x_max - yvala * x_min;
     }
@@ -54,12 +54,12 @@ int main(int argc, char *argv[]) {
     clock_t t_end = clock();
 
     double seq_time = (double)(t_end - t_start) / CLOCKS_PER_SEC;
-	printf("\n");
-    printf("  %sSequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
     printf("\n");
-	rule_write(n, out_prefix, x, w, r);
+    printf("  %ssequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
+    printf("\n");
+    rule_write(n, out_prefix, x, w, r);
 
-	appendTiming(out_prefix, seq_time);
+    append_timing(out_prefix, seq_time);
 
     free(r); free(x); free(w);
     return 0;
