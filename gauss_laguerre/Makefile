@@ -1,12 +1,14 @@
-CXX      := g++
-MPI_CC  := mpicxx
-NVCC    := nvcc
+GNU := gcc
+MPI := mpicc
+CUDA := nvcc
+OMP := gcc -fopenmp
 
-OMPFLAGS     := -fopenmp
-MPI_LDFLAGS  := -lm
-CUDA_LDFLAGS := -lm -lcufft
-CUDA_WARNFLAGS := -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
+OMP_LDFLAGS := -lm -lfftw3
+MPI_LDFLAGS := -lm
+CUDA_LDFLAGS := -lm -lcufft -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
 
+CMN_DIR := src/common.c
+SRC_DIR := src
 BIN_DIR := bin
 
 .PHONY: all clean seq mpi omp cuda
@@ -17,16 +19,16 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 seq: | $(BIN_DIR)
-	$(CXX) src/seq.c src/common.c -o $(BIN_DIR)/seq -lm
+	$(GNU) $(SRC_DIR)/seq.c $(CMN_DIR) -o $(BIN_DIR)/seq -lm
 
 mpi: | $(BIN_DIR)
-	$(MPI_CC) src/mpi.c src/common.c -o $(BIN_DIR)/mpi $(MPI_LDFLAGS)
+	$(MPI) $(SRC_DIR)/mpi.c $(CMN_DIR) -o $(BIN_DIR)/mpi $(MPI_LDFLAGS)
 
 omp: | $(BIN_DIR)
-	$(CXX) $(OMPFLAGS) src/omp.c src/common.c -o $(BIN_DIR)/omp -lm -lfftw3
+	$(OMP) $(SRC_DIR)/omp.c $(CMN_DIR) -o $(BIN_DIR)/omp $(OMP_LDFLAGS)
 
 cuda: | $(BIN_DIR)
-	$(NVCC) -O3 $(CUDA_WARNFLAGS) src/cuda.cu src/common.c -o $(BIN_DIR)/cuda $(CUDA_LDFLAGS)
+	$(CUDA) $(SRC_DIR)/cuda.cu $(CMN_DIR) -o $(BIN_DIR)/cuda $(CUDA_LDFLAGS)
 
 clean:
 	rm -rf $(BIN_DIR)/*
