@@ -1,4 +1,4 @@
-#include "../include/common.hpp"
+#include "../include/common.h"
 
 void r8mat_write(char *output_filename, int m, int n, double table[]) {
     FILE *output = fopen(output_filename, "wt");

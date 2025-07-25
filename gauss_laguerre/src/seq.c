@@ -1,4 +1,4 @@
-#include "../include/common.hpp"
+#include "../include/common.h"
 #include <time.h>
 
 double *nc_compute_new(int n, double x_min, double x_max, double x[]) {

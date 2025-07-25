@@ -1,4 +1,4 @@
-#include "../include/common.hpp"
+#include "../include/common.h"
 #include <mpi.h>
 
 #define MASTER 0
