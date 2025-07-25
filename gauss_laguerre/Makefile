@@ -3,8 +3,9 @@ MPI := mpicc
 CUDA := nvcc
 OMP := gcc -fopenmp
 
+SEQ_LDFLAGS := -lm
 OMP_LDFLAGS := -lm -lfftw3
-MPI_LDFLAGS := -lm
+MPI_LDFLAGS := -lm -lfftw3
 CUDA_LDFLAGS := -lm -lcufft -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
 
 CMN_DIR := src/common.c
@@ -19,7 +20,7 @@ $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
 seq: | $(BIN_DIR)
-	$(GNU) $(SRC_DIR)/seq.c $(CMN_DIR) -o $(BIN_DIR)/seq -lm
+	$(GNU) $(SRC_DIR)/seq.c $(CMN_DIR) -o $(BIN_DIR)/seq $(SEQ_LDFLAGS)
 
 mpi: | $(BIN_DIR)
 	$(MPI) $(SRC_DIR)/mpi.c $(CMN_DIR) -o $(BIN_DIR)/mpi $(MPI_LDFLAGS)

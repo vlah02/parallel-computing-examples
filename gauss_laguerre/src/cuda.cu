@@ -3,17 +3,64 @@
 #include <cuda_profiler_api.h>
 #include <cufft.h>
 
+__global__ void nc_compute_kernel(
+    int n, double x_min, double x_max, const double* x, double* w
+) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+
+    extern __shared__ double d[];
+
+    for (int j = 0; j < n; j++) d[j] = 0.0;
+    d[i] = 1.0;
+
+    for (int j = 2; j <= n; j++) {
+        for (int k = j; k <= n; k++)
+            d[n + j - k - 1] = (d[n + j - k - 2] - d[n + j - k - 1]) /
+                               (x[n - k] - x[n + j - k - 1]);
+    }
+    for (int j = 1; j <= n - 1; j++) {
+        for (int k = 1; k <= n - j; k++)
+            d[n - k - 1] -= x[n - k - j] * d[n - k];
+    }
+
+    double yvala = d[n - 1] / n, yvalb = d[n - 1] / n;
+    for (int j = n - 2; j >= 0; j--) {
+        yvala = yvala * x_min + d[j] / (j + 1);
+        yvalb = yvalb * x_max + d[j] / (j + 1);
+    }
+    w[i] = yvalb * x_max - yvala * x_min;
+}
+
+double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
+    double *h_w = (double*)malloc(n * sizeof(double));
+    double *d_x, *d_w;
+
+    cudaMalloc(&d_x, n * sizeof(double));
+    cudaMalloc(&d_w, n * sizeof(double));
+    cudaMemcpy(d_x, x, n * sizeof(double), cudaMemcpyHostToDevice);
+
+    int threads = 128;
+    int blocks = (n + threads - 1) / threads;
+    nc_compute_kernel<<<blocks, threads, n * sizeof(double)>>>(n, x_min, x_max, d_x, d_w);
+    cudaDeviceSynchronize();
+
+    cudaMemcpy(h_w, d_w, n * sizeof(double), cudaMemcpyDeviceToHost);
+    cudaFree(d_x);
+    cudaFree(d_w);
+    return h_w;
+}
+
 __global__ void extract_and_linearscale(cufftDoubleComplex *Y, double *w, int n, double a, double b) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
 
     double scale = 2.0 / n;
     if (i == 0 || i == n - 1) scale *= 0.5;
-
     w[i] = scale * Y[i].x * ((b - a) * 0.5);
 }
 
-double *nc_compute_new(int n, double a, double b, double x[]) {
+double *nc_compute_new_fft(int n, double a, double b, double x[]) {
     int Nfft = 2 * n;
     double *d_y;
     cufftDoubleComplex *d_Y;
@@ -50,7 +97,7 @@ double *nc_compute_new(int n, double a, double b, double x[]) {
 }
 
 int main(int argc, char *argv[]) {
-	double a, b;
+    double a, b;
     int n;
     char out_prefix[256];
     if (argc >= 2) n = atoi(argv[1]); else { printf("Enter N: "); scanf("%d", &n); }
@@ -63,11 +110,11 @@ int main(int argc, char *argv[]) {
     getOutputBase(out_prefix, base, sizeof(base));
 
     double *x_ref = (double *)malloc(n * sizeof(double));
-	double *w_ref = (double *)malloc(n * sizeof(double));
-	if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
-    	fprintf(stderr, "Failed to load precomputed x or w files.\n");
-    	exit(EXIT_FAILURE);
-	}
+    double *w_ref = (double *)malloc(n * sizeof(double));
+    if (!loadSequentialResult(base, n, "x", x_ref) || !loadSequentialResult(base, n, "w", w_ref)) {
+        fprintf(stderr, "Failed to load precomputed x or w files.\n");
+        exit(EXIT_FAILURE);
+    }
 
     double seq_time = 0.0;
     if (!loadSequentialTiming(base, &seq_time)) {
@@ -75,7 +122,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-	double *r = (double *)malloc(2 * sizeof(double));
+    double *r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
     double *x_calc = ccn_compute_points_new(n);
@@ -88,25 +135,28 @@ int main(int argc, char *argv[]) {
 
     float par_time;
     cudaEventElapsedTime(&par_time, start, stop);
-	par_time /= 1000.0;
+    par_time /= 1000.0;
 
     for (int i = 0; i < n; i++)
         x_calc[i] = ((a + b) + (b - a) * x_calc[i]) * 0.5;
 
     int ok = compareResults(x_ref, x_calc, n, 1e-6) && compareResults(w_ref, w_calc, n, 1e-6);
 
-	printf("\n");
+    printf("\n");
     printf("%s  Test %s%s\n", BOLD, ok ? GREEN "PASSED" : RED "FAILED", CLEAR);
     printf("%s  Sequential time: %s%.6fs %s\n", BOLD, BLUE, seq_time, CLEAR);
     printf("%s  Parallel time:   %s%.6fs %s\n", BOLD, BLUE, par_time, CLEAR);
     printf("%s  Speedup:         %s%.3fx %s\n", BOLD, BLUE, seq_time / par_time, CLEAR);
-	printf("\n");
+    printf("\n");
     rule_write(n, out_prefix, x_calc, w_calc, r);
-	appendTiming(out_prefix, par_time);
+    appendTiming(out_prefix, par_time);
 
     free(r);
-	free(x_ref); free(w_ref);
-	free(x_calc); cudaFreeHost(w_calc);
+    free(x_ref); free(w_ref);
+    free(x_calc);
+    if (w_calc)
+        cudaFreeHost(w_calc);
+
     cudaEventDestroy(start); cudaEventDestroy(stop);
     return 0;
 }

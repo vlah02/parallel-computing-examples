@@ -1,5 +1,6 @@
 #include "../include/common.h"
 #include <mpi.h>
+#include <fftw3.h>
 
 #define MASTER 0
 
@@ -51,6 +52,39 @@ double *nc_compute_new(int n, double x_min, double x_max, double x[], int rank, 
     return w_calc;
 }
 
+double *nc_compute_new_fft(int n, double x_min, double x_max, double x[], int rank, int size) {
+	int chunk_size = n / size;
+	int local_count = chunk_size;
+	int starting_index = rank * chunk_size;
+
+	double* w_local = (double*)malloc(local_count * sizeof(double));
+	double* c = (double*)fftw_malloc(sizeof(double) * n);
+	double* d = (double*)fftw_malloc(sizeof(double) * n);
+
+	for (int k = 0; k < n; ++k) c[k] = 1.0;
+	c[0] = c[n-1] = 0.5;
+
+	fftw_plan p = fftw_plan_r2r_1d(n, c, d, FFTW_REDFT00, FFTW_ESTIMATE);
+	fftw_execute(p);
+	fftw_destroy_plan(p);
+
+	double scale = 2.0 / (n-1) * ((x_max - x_min) / 2.0);
+	for (int i = 0; i < local_count; i++) {
+		int k = starting_index + i;
+		w_local[i] = d[k] * scale;
+	}
+
+	fftw_free(c);
+	fftw_free(d);
+
+	double *w_calc = NULL;
+	if (rank == MASTER) w_calc = (double *)malloc(n * sizeof(double));
+
+	MPI_Gather(w_local, local_count, MPI_DOUBLE, w_calc, local_count, MPI_DOUBLE, MASTER, MPI_COMM_WORLD);
+	free(w_local);
+	return w_calc;
+}
+
 int main(int argc, char *argv[]) {
     double a, b;
 	int n;
@@ -91,7 +125,7 @@ int main(int argc, char *argv[]) {
         if (rank == MASTER) fprintf(stderr, "No times found in sequential timing file for %s\n", base);
         MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
-	
+
 	double *r = (double *)malloc(2 * sizeof(double));
     r[0] = a; r[1] = b;
 
