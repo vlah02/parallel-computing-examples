@@ -6,7 +6,7 @@ OMP := gcc -fopenmp
 SEQ_LDFLAGS := -lm
 OMP_LDFLAGS := -lm -lfftw3
 MPI_LDFLAGS := -lm -lfftw3
-CUDA_LDFLAGS := -lm -lcufft -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
+CUDA_LDFLAGS := -lm -lcufft -lnvToolsExt -diag-suppress=1650 -Xcompiler "-Wno-unused-result"
 
 CMN_DIR := src/common.c
 SRC_DIR := src

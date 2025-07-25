@@ -85,7 +85,7 @@ void get_output_base(const char *root, char *base, size_t len) {
 
 bool load_sequential_result(const char *base, int n, const char *kind, double *arr) {
     char filename[512];
-    snprintf(filename, sizeof(filename), "output/seq/%s_%s.txt", base, kind);
+    snprintf(filename, sizeof(filename), "output/seq/%s/%s_%s.txt", base, base, kind);
     FILE *f = fopen(filename, "r");
     if (!f) return false;
 
@@ -101,7 +101,7 @@ bool load_sequential_result(const char *base, int n, const char *kind, double *a
 
 bool load_sequential_timing(const char *base, double *cpu_sec) {
     char seqtime[512];
-    snprintf(seqtime, sizeof(seqtime), "output/seq/%s_time.txt", base);
+    snprintf(seqtime, sizeof(seqtime), "output/seq/%s/%s_time.txt", base, base);
     FILE *fs = fopen(seqtime, "r");
     if (!fs) return false;
     double sum = 0, tv;

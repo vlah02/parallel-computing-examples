@@ -1,7 +1,7 @@
 #include "../include/common.h"
 #include <cuda_runtime.h>
-#include <cuda_profiler_api.h>
 #include <cufft.h>
+#include <nvToolsExt.h>
 
 __global__ void nc_compute_kernel(
     int n, double x_min, double x_max, const double* x, double* w
@@ -33,19 +33,30 @@ __global__ void nc_compute_kernel(
 }
 
 double *nc_compute_new(int n, double x_min, double x_max, double x[]) {
+    nvtxRangePushA("cudaMalloc (input/output)");
     double *h_w = (double*)malloc(n * sizeof(double));
     double *d_x, *d_w;
-
     cudaMalloc(&d_x, n * sizeof(double));
     cudaMalloc(&d_w, n * sizeof(double));
+    nvtxRangePop();
+
+    nvtxRangePushA("Host to Device copy");
     cudaMemcpy(d_x, x, n * sizeof(double), cudaMemcpyHostToDevice);
+    nvtxRangePop();
 
     int threads = 128;
     int blocks = (n + threads - 1) / threads;
+
+    cudaDeviceSynchronize();
+    nvtxRangePushA("Kernel Launch");
     nc_compute_kernel<<<blocks, threads, n * sizeof(double)>>>(n, x_min, x_max, d_x, d_w);
     cudaDeviceSynchronize();
+    nvtxRangePop();
 
+    nvtxRangePushA("Device to Host copy");
     cudaMemcpy(h_w, d_w, n * sizeof(double), cudaMemcpyDeviceToHost);
+    nvtxRangePop();
+
     cudaFree(d_x);
     cudaFree(d_w);
     return h_w;
@@ -66,28 +77,36 @@ double *nc_compute_new_fft(int n, double a, double b, double x[]) {
     cufftDoubleComplex *d_Y;
     double *h_w;
 
+    nvtxRangePushA("cudaMalloc (FFT)");
     cudaMallocHost(&h_w, n * sizeof(double));
     cudaMalloc(&d_y, nfft * sizeof(double));
     cudaMalloc(&d_Y, (n + 1) * sizeof(cufftDoubleComplex));
+    nvtxRangePop();
 
+    nvtxRangePushA("Prepare input for FFT");
     double *h_y = (double *)malloc((n + 1) * sizeof(double));
     h_y[0] = 1.0;
     h_y[n] = (n & 1) ? -1.0 : 1.0;
     for (int k = 1; k < n; ++k)
         h_y[k] = x[k] + x[n - k];
-
     cudaMemcpy(d_y, h_y, (n + 1) * sizeof(double), cudaMemcpyHostToDevice);
     cudaMemcpy(d_y + n + 1, h_y + 1, (n - 1) * sizeof(double), cudaMemcpyHostToDevice);
     free(h_y);
+    nvtxRangePop();
 
+    nvtxRangePushA("cuFFT plan/exec");
     cufftHandle plan;
     cufftPlan1d(&plan, nfft, CUFFT_D2Z, 1);
     cufftExecD2Z(plan, d_y, d_Y);
+    nvtxRangePop();
 
     int threads = 256;
     int blocks = (n + threads - 1) / threads;
+
+    nvtxRangePushA("FFT Postprocess Kernel");
     extract_and_linearscale<<<blocks, threads>>>(d_Y, h_w, n, a, b);
     cudaDeviceSynchronize();
+    nvtxRangePop();
 
     cufftDestroy(plan);
     cudaFree(d_y);
@@ -126,12 +145,25 @@ int main(int argc, char *argv[]) {
     r[0] = a; r[1] = b;
 
     double *x_calc = ccn_compute_points_new(n);
+
+    nvtxRangePushA("Warmup");
     double *w_warmup = nc_compute_new(n, a, b, x_calc);
+    nvtxRangePop();
     cudaFreeHost(w_warmup);
-    cudaEvent_t start, stop; cudaEventCreate(&start); cudaEventCreate(&stop);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
     cudaEventRecord(start);
+
+    nvtxRangePushA("Parallel computation");
     double *w_calc = nc_compute_new(n, a, b, x_calc);
-    cudaEventRecord(stop); cudaEventSynchronize(stop);
+    nvtxRangePop();
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
     float par_time;
     cudaEventElapsedTime(&par_time, start, stop);
     par_time /= 1000.0;
@@ -151,10 +183,8 @@ int main(int argc, char *argv[]) {
     append_timing(out_prefix, par_time);
 
     free(r);
-    free(x_ref); free(w_ref);
-    free(x_calc);
-    if (w_calc)
-        cudaFreeHost(w_calc);
+    free(x_ref); free(w_ref); free(x_calc);
+    if (w_calc) cudaFreeHost(w_calc);
 
     cudaEventDestroy(start); cudaEventDestroy(stop);
     return 0;
